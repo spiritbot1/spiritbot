@@ -18,15 +18,6 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Show SSH key fingerprint
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
-        run: |
-          echo "$SSH_PRIVATE_KEY" > /tmp/spiritone_key
-          chmod 600 /tmp/spiritone_key
-          ssh-keygen -lf /tmp/spiritone_key
-          rm -f /tmp/spiritone_key
-
       - name: Install and Build
         run: |
           npm install
