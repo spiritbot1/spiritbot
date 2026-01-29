@@ -1,0 +1,79 @@
+{
+  "$comment": "精灵1号 - 国内通信渠道配置示例",
+  "$comment2": "复制为 channels-config.json 后填入实际值",
+  
+  "gateway": {
+    "port": 8080,
+    "publicUrl": "https://your-domain.com"
+  },
+  
+  "wecom": {
+    "$comment": "企业微信配置 - 在企业微信管理后台获取",
+    "$doc": "https://developer.work.weixin.qq.com/document/",
+    
+    "corpId": "ww1234567890abcdef",
+    "agentId": "1000001",
+    "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "token": "your_callback_token",
+    "encodingAESKey": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    
+    "$webhookComment": "群机器人 Webhook（可选，用于发送群消息）",
+    "webhookUrl": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx"
+  },
+  
+  "dingtalk": {
+    "$comment": "钉钉配置 - 在钉钉开放平台获取",
+    "$doc": "https://open.dingtalk.com/document/",
+    
+    "appKey": "dingxxxxxxxxxx",
+    "appSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "robotCode": "dingxxxxxxxxx",
+    
+    "$webhookComment": "群机器人 Webhook（可选）",
+    "webhookUrl": "https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx",
+    "webhookSecret": "SECxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  
+  "feishu": {
+    "$comment": "飞书配置 - 在飞书开放平台获取",
+    "$doc": "https://open.feishu.cn/document/",
+    
+    "appId": "cli_xxxxxxxxxx",
+    "appSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "verificationToken": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "encryptKey": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+    
+    "$webhookComment": "群机器人 Webhook（可选）",
+    "webhookUrl": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx",
+    "webhookSecret": "xxxxxxxxxxxxxxxxxx"
+  },
+  
+  "$setupGuide": {
+    "企业微信设置步骤": [
+      "1. 登录企业微信管理后台: https://work.weixin.qq.com/wework_admin/frame",
+      "2. 进入 应用管理 → 自建 → 创建应用",
+      "3. 记录 AgentId 和 Secret",
+      "4. 在应用详情 → 接收消息 → 设置 API 接收",
+      "5. 填写回调 URL: https://your-domain.com/callback/wecom",
+      "6. 记录 Token 和 EncodingAESKey"
+    ],
+    
+    "钉钉设置步骤": [
+      "1. 登录钉钉开放平台: https://open.dingtalk.com/",
+      "2. 创建企业内部应用 → 机器人",
+      "3. 记录 AppKey 和 AppSecret",
+      "4. 配置机器人 → 消息接收地址: https://your-domain.com/callback/dingtalk",
+      "5. (可选) 创建群机器人获取 Webhook"
+    ],
+    
+    "飞书设置步骤": [
+      "1. 登录飞书开放平台: https://open.feishu.cn/",
+      "2. 创建企业自建应用 → 添加机器人能力",
+      "3. 记录 App ID 和 App Secret",
+      "4. 事件订阅 → 配置请求地址: https://your-domain.com/callback/feishu",
+      "5. 记录 Verification Token 和 Encrypt Key",
+      "6. 订阅事件: im.message.receive_v1"
+    ]
+  }
+}
+

@@ -1,0 +1,46 @@
+# ====================================
+# 精灵1号 - 通讯渠道配置
+# ====================================
+# ⚠️ 重要：复制此文件为 .env，然后填入真实值
+# ⚠️ .env 文件绝对不能提交到 Git！
+# ====================================
+
+# ------------------
+# 飞书 (Feishu/Lark)
+# ------------------
+FEISHU_APP_ID=your_app_id_here
+FEISHU_APP_SECRET=your_app_secret_here
+FEISHU_VERIFICATION_TOKEN=your_verification_token_here
+FEISHU_ENCRYPT_KEY=your_encrypt_key_here
+
+# ------------------
+# 企业微信 (WeCom)
+# ------------------
+WECOM_CORP_ID=your_corp_id_here
+WECOM_AGENT_ID=your_agent_id_here
+WECOM_SECRET=your_secret_here
+WECOM_TOKEN=your_token_here
+WECOM_ENCODING_AES_KEY=your_aes_key_here
+
+# ------------------
+# 钉钉 (DingTalk)
+# ------------------
+DINGTALK_APP_KEY=your_app_key_here
+DINGTALK_APP_SECRET=your_app_secret_here
+DINGTALK_ROBOT_CODE=your_robot_code_here
+DINGTALK_AESKEY=your_aes_key_here
+DINGTALK_TOKEN=your_token_here
+
+# ------------------
+# 服务器配置
+# ------------------
+GATEWAY_PORT=3100
+GATEWAY_HOST=0.0.0.0
+# 公网回调地址（必须是 HTTPS）
+CALLBACK_BASE_URL=https://your-domain.com/callback
+
+# ------------------
+# 精灵1号核心服务
+# ------------------
+SPIRIT_CORE_URL=http://localhost:3000
+

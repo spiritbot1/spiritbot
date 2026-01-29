@@ -1,0 +1,62 @@
+{
+  "$comment": "精灵1号 v2.0 配置文件示例 - 复制为 config.json 后填入实际值",
+  
+  "api_keys": {
+    "$comment": "AI 模型 API Keys",
+    "anthropic": "sk-ant-xxxxxxxxxxxx",
+    "openai": "sk-xxxxxxxxxxxx",
+    "dashscope": "sk-xxxxxxxxxxxx",
+    "deepseek": "sk-xxxxxxxxxxxx"
+  },
+  
+  "channels": {
+    "$comment": "通信渠道配置",
+    "telegram": {
+      "bot_token": "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
+    },
+    "discord": {
+      "bot_token": "xxxxxxxxxxxx"
+    },
+    "slack": {
+      "bot_token": "xoxb-xxxxxxxxxxxx",
+      "app_token": "xapp-xxxxxxxxxxxx"
+    }
+  },
+  
+  "models": {
+    "$comment": "模型配置",
+    "default": "qwen-32b",
+    "reasoning": "deepseek-r1",
+    "coding": "deepseek-v2.5",
+    "simple": "qwen-7b",
+    "complex": "qwen-72b"
+  },
+  
+  "spirit": {
+    "$comment": "精灵1号专属配置",
+    "name": "精灵1号",
+    "consciousness_interval_ms": 60000,
+    "memory_depth": 100,
+    "enable_knowledge_graph": true,
+    "enable_consciousness_loop": true,
+    "visible_thinking": true
+  },
+  
+  "gateway": {
+    "port": 18789,
+    "bind": "0.0.0.0",
+    "web_port": 3000
+  },
+  
+  "database": {
+    "postgres": "postgres://postgres:postgres@localhost:5432/spirit_one",
+    "redis": "redis://localhost:6379",
+    "qdrant": "http://localhost:6333"
+  },
+  
+  "security": {
+    "allowed_users": ["+86138xxxx1234", "user123"],
+    "require_confirmation_for_dangerous_ops": true
+  }
+}
+

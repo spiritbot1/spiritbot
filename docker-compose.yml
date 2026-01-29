@@ -1,0 +1,128 @@
+# 精灵1号 v2.0 - Docker 联合编排
+# Moltbot + 精灵1号 深度集成
+
+version: '3.8'
+
+services:
+  # ========================
+  # Moltbot Gateway - 执行引擎
+  # ========================
+  moltbot-gateway:
+    build:
+      context: ../moltbot-core
+      dockerfile: Dockerfile
+    container_name: spirit-one-gateway
+    ports:
+      - "18789:18789"  # Gateway 端口
+      - "3000:3000"    # Web UI 端口
+    environment:
+      - NODE_ENV=production
+      - GATEWAY_PORT=18789
+      - GATEWAY_BIND=0.0.0.0
+      # API Keys (从 .env 文件读取)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      # 精灵1号配置
+      - SPIRIT_SOUL_PATH=/app/fusion/soul-bridge/SOUL.md
+      - SPIRIT_AGENTS_PATH=/app/fusion/soul-bridge/AGENTS.md
+    volumes:
+      # 挂载精灵1号配置
+      - ../spirit-fusion:/app/fusion:ro
+      - ~/.clawdbot:/root/.clawdbot
+      # 挂载 workspace
+      - ~/clawd:/root/clawd
+    networks:
+      - spirit-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================
+  # 精灵1号 Core - 智能大脑
+  # ========================
+  central-brain:
+    build:
+      context: ../central-brain
+      dockerfile: Dockerfile
+    container_name: spirit-one-brain
+    ports:
+      - "4000:4000"  # API 端口
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/spirit_one
+      - REDIS_URL=redis://redis:6379
+      # 模型配置
+      - DEFAULT_MODEL=qwen-32b
+      - REASONING_MODEL=deepseek-r1
+      - CODING_MODEL=deepseek-v2.5
+    volumes:
+      - brain-data:/app/data
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - spirit-network
+    restart: unless-stopped
+
+  # ========================
+  # 知识图谱数据库
+  # ========================
+  postgres:
+    image: postgres:16-alpine
+    container_name: spirit-one-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=spirit_one
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - spirit-network
+    restart: unless-stopped
+
+  # ========================
+  # 缓存和记忆
+  # ========================
+  redis:
+    image: redis:7-alpine
+    container_name: spirit-one-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - spirit-network
+    restart: unless-stopped
+
+  # ========================
+  # 向量数据库 (用于知识检索)
+  # ========================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: spirit-one-vectors
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - spirit-network
+    restart: unless-stopped
+
+networks:
+  spirit-network:
+    driver: bridge
+
+volumes:
+  brain-data:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+
