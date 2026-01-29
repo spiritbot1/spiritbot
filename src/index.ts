@@ -97,25 +97,10 @@ app.post('/callback/feishu', async (req, res) => {
   try {
     const body = req.body;
     
-    // 1. URL 验证请求（飞书首次配置时发送）
-    if (body.type === 'url_verification') {
-      console.log('[飞书] URL 验证请求');
-      
-      // 验证 token
-      if (body.token !== config.feishu.verificationToken) {
-        console.error('[飞书] Token 验证失败');
-        return res.status(400).json({ error: 'Token 验证失败' });
-      }
-      
-      // 返回 challenge 完成验证
-      console.log('[飞书] 验证成功，返回 challenge');
-      return res.json({ challenge: body.challenge });
-    }
-    
-    // 2. 处理加密消息
+    // 1. 先解密（如果是加密消息）
     let eventBody = body;
     if (body.encrypt && config.feishu.encryptKey) {
-      console.log('[飞书] 解密加密消息');
+      console.log('[飞书] 解密加密消息...');
       const key = crypto.createHash('sha256').update(config.feishu.encryptKey).digest();
       const encryptedBuffer = Buffer.from(body.encrypt, 'base64');
       const iv = encryptedBuffer.slice(0, 16);
@@ -124,6 +109,18 @@ app.post('/callback/feishu', async (req, res) => {
       let decrypted = decipher.update(encrypted);
       decrypted = Buffer.concat([decrypted, decipher.final()]);
       eventBody = JSON.parse(decrypted.toString('utf8'));
+      console.log('[飞书] 解密后:', JSON.stringify(eventBody, null, 2));
+    }
+    
+    // 2. URL 验证请求（解密后检查）
+    if (eventBody.type === 'url_verification') {
+      console.log('[飞书] URL 验证请求');
+      if (eventBody.token !== config.feishu.verificationToken) {
+        console.error('[飞书] Token 验证失败');
+        return res.status(400).json({ error: 'Token 验证失败' });
+      }
+      console.log('[飞书] 验证成功，返回 challenge');
+      return res.json({ challenge: eventBody.challenge });
     }
     
     // 3. 处理事件消息
