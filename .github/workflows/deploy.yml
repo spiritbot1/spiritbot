@@ -1,0 +1,54 @@
+name: Deploy Spirit One
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. 拉取代码
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. 安装 Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # 3. 安装依赖并构建
+      - name: Install and Build
+        run: |
+          npm install
+          npm run build
+
+      # 4. 部署到服务器
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@v4.1.8
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ARGS: "-rltDzv --delete --exclude='node_modules' --exclude='.env' --exclude='.git'"
+          SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
+          SOURCE: "./"
+          REMOTE_HOST: ${{ secrets.SERVER_IP }}
+          REMOTE_USER: ${{ secrets.SERVER_USER }}
+          TARGET: "/www/wwwroot/spirit.aishangyou.cn"
+
+      # 5. 重启服务
+      - name: Restart Service
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /www/wwwroot/spirit.aishangyou.cn
+            npm install --production
+            pm2 restart spirit-gateway || pm2 start dist/index.js --name spirit-gateway
+            pm2 save
+            echo "✅ 精灵1号已重启"
+
