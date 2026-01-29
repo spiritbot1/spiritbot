@@ -18,25 +18,26 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install and Build
+      - name: Install and Build Spirit Gateway
         run: |
           npm install
           npm run build
         env:
           CI: false
 
-      - name: Deploy to Server
+      # 部署精灵1号网关
+      - name: Deploy Spirit Gateway
         uses: easingthemes/ssh-deploy@v4.1.8
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          ARGS: "-rltDzv --delete --exclude='.user.ini'"
+          ARGS: "-rltDzv --delete --exclude='.user.ini' --exclude='.env' --exclude='node_modules'"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
           SOURCE: "dist/"
           REMOTE_HOST: ${{ secrets.SERVER_IP }}
           REMOTE_USER: ${{ secrets.SERVER_USER }}
           TARGET: "/www/wwwroot/spirit.aishangyou.cn/dist"
 
-      - name: Deploy package.json
+      - name: Deploy Spirit package.json
         uses: easingthemes/ssh-deploy@v4.1.8
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
@@ -47,15 +48,56 @@ jobs:
           REMOTE_USER: ${{ secrets.SERVER_USER }}
           TARGET: "/www/wwwroot/spirit.aishangyou.cn/"
 
-      - name: Restart Service
+      # 部署 Moltbot Core
+      - name: Deploy Moltbot Core
+        uses: easingthemes/ssh-deploy@v4.1.8
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ARGS: "-rltDzv --delete --exclude='node_modules'"
+          SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
+          SOURCE: "moltbot-core/"
+          REMOTE_HOST: ${{ secrets.SERVER_IP }}
+          REMOTE_USER: ${{ secrets.SERVER_USER }}
+          TARGET: "/www/wwwroot/moltbot-gateway/"
+
+      # 安装依赖并重启服务
+      - name: Restart Services
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            # 精灵1号
             cd /www/wwwroot/spirit.aishangyou.cn
             npm install --production
             pm2 restart spirit-gateway || pm2 start dist/index.js --name spirit-gateway
             echo "✅ 精灵1号已重启"
-
+            
+            # Moltbot Gateway
+            cd /www/wwwroot/moltbot-gateway
+            npm install --production --ignore-engines 2>/dev/null || npm install --omit=dev --legacy-peer-deps
+            
+            # 创建配置文件（如果不存在）
+            mkdir -p ~/.clawdbot
+            if [ ! -f ~/.clawdbot/moltbot.json ]; then
+              cat > ~/.clawdbot/moltbot.json << 'MOLTCONF'
+            {
+              "gateway": {
+                "port": 18789,
+                "auth": { "token": "aishangyou-gateway-2026" }
+              },
+              "hooks": {
+                "enabled": true,
+                "token": "spirit-moltbot-hook-aishangyou2026",
+                "path": "/hooks"
+              }
+            }
+            MOLTCONF
+            fi
+            
+            # 启动 Moltbot
+            pm2 delete moltbot-gateway 2>/dev/null || true
+            pm2 start /www/wwwroot/moltbot-gateway/dist/index.js --name moltbot-gateway -- gateway --bind lan --port 18789
+            pm2 save
+            echo "✅ Moltbot Gateway 已重启"
