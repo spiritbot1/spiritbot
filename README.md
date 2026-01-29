@@ -118,3 +118,4 @@ pnpm moltbot agent --message "你好，精灵1号"
 
 # 自动部署测试 - Thu Jan 29 20:25:48 CST 2026
 # SSH Key Updated - Thu Jan 29 20:33:14 CST 2026
+
