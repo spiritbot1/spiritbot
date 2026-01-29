@@ -21,8 +21,56 @@ const config = {
         appSecret: process.env.FEISHU_APP_SECRET || '',
         verificationToken: process.env.FEISHU_VERIFICATION_TOKEN || '',
         encryptKey: process.env.FEISHU_ENCRYPT_KEY || ''
+    },
+    ai: {
+        apiKey: process.env.SILICONFLOW_API_KEY || '',
+        model: 'deepseek-ai/DeepSeek-V3'
     }
 };
+// ============================
+// 调用硅基流动 AI
+// ============================
+async function callAI(message) {
+    if (!config.ai.apiKey) {
+        return '[精灵1号] AI 服务未配置';
+    }
+    try {
+        const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.ai.apiKey}`
+            },
+            body: JSON.stringify({
+                model: config.ai.model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: '你是精灵1号，一个友好、智能的AI助手，是用户的数字生命伴侣。你的回复要简洁、有帮助、有温度。'
+                    },
+                    {
+                        role: 'user',
+                        content: message
+                    }
+                ],
+                max_tokens: 500
+            })
+        });
+        const data = await response.json();
+        if (data.choices && data.choices[0]?.message?.content) {
+            return data.choices[0].message.content;
+        }
+        else if (data.error) {
+            console.error('[AI] 错误:', data.error);
+            return `[精灵1号] AI 服务暂时不可用`;
+        }
+        return '[精灵1号] AI 返回异常';
+    }
+    catch (error) {
+        console.error('[AI] 调用失败:', error);
+        return '[精灵1号] AI 服务连接失败';
+    }
+}
 // ============================
 // 健康检查
 // ============================
@@ -82,9 +130,10 @@ app.post('/callback/feishu', async (req, res) => {
                 textContent = message?.content || '';
             }
             console.log(`[飞书] 收到消息: "${textContent}" 来自用户: ${sender?.sender_id?.open_id}`);
-            // TODO: 调用精灵1号处理消息
-            // 目前先返回简单回复
-            const reply = `[精灵1号] 收到你的消息: ${textContent}`;
+            // 调用 AI 生成回复
+            console.log('[飞书] 调用 AI 生成回复...');
+            const reply = await callAI(textContent);
+            console.log('[飞书] AI 回复:', reply);
             // 回复消息（需要 tenant_access_token）
             try {
                 // 获取 token
