@@ -329,17 +329,20 @@ export function createFeishuEventHandler(
   onMessage: (msg: FeishuMessage) => Promise<string>
 ) {
   return async (body: Record<string, unknown>) => {
-    // 1. 处理 URL 验证
-    const challenge = channel.verifyCallback(body as { challenge?: string; token?: string; type?: string });
-    if (challenge) {
-      return { challenge };
-    }
-    
-    // 2. 解密消息（如果加密）
+    // 1. 先解密消息（如果加密）- 必须先解密才能验证 challenge
     let eventBody = body;
     if (body.encrypt) {
+      console.log('[飞书] 解密加密消息...');
       const decrypted = channel.decryptMessage(body.encrypt as string);
+      console.log('[飞书] 解密结果:', decrypted);
       eventBody = JSON.parse(decrypted);
+    }
+    
+    // 2. 处理 URL 验证（解密后）
+    const challenge = channel.verifyCallback(eventBody as { challenge?: string; token?: string; type?: string });
+    if (challenge) {
+      console.log('[飞书] URL 验证成功，返回 challenge');
+      return { challenge };
     }
     
     // 3. 处理事件
