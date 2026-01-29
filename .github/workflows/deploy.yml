@@ -10,35 +10,43 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. 拉取代码
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. 安装 Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # 3. 安装依赖并构建
       - name: Install and Build
         run: |
           npm install
           npm run build
+        env:
+          CI: false
 
-      # 4. 部署到服务器
       - name: Deploy to Server
         uses: easingthemes/ssh-deploy@v4.1.8
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          ARGS: "-rltDzv --delete --exclude='node_modules' --exclude='.env' --exclude='.git'"
+          ARGS: "-rltDzv --delete --exclude='.user.ini'"
           SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
-          SOURCE: "./"
+          SOURCE: "dist/"
           REMOTE_HOST: ${{ secrets.SERVER_IP }}
           REMOTE_USER: ${{ secrets.SERVER_USER }}
-          TARGET: "/www/wwwroot/spirit.aishangyou.cn"
+          TARGET: "/www/wwwroot/spirit.aishangyou.cn/dist"
 
-      # 5. 重启服务
+      - name: Deploy package.json
+        uses: easingthemes/ssh-deploy@v4.1.8
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ARGS: "-rltDzv"
+          SSH_CMD_ARGS: "-o StrictHostKeyChecking=no"
+          SOURCE: "package.json"
+          REMOTE_HOST: ${{ secrets.SERVER_IP }}
+          REMOTE_USER: ${{ secrets.SERVER_USER }}
+          TARGET: "/www/wwwroot/spirit.aishangyou.cn/"
+
       - name: Restart Service
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -49,6 +57,5 @@ jobs:
             cd /www/wwwroot/spirit.aishangyou.cn
             npm install --production
             pm2 restart spirit-gateway || pm2 start dist/index.js --name spirit-gateway
-            pm2 save
             echo "✅ 精灵1号已重启"
 
