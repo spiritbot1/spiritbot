@@ -23,6 +23,13 @@ const config = {
   ai: {
     apiKey: process.env.SILICONFLOW_API_KEY || '',
     model: 'deepseek-ai/DeepSeek-V3'
+  },
+  moltbot: {
+    gatewayUrl: process.env.MOLTBOT_GATEWAY_URL || '',
+    hookPath: process.env.MOLTBOT_HOOK_PATH || '/hooks',
+    hookToken: process.env.MOLTBOT_HOOK_TOKEN || '',
+    defaultAgentName: process.env.MOLTBOT_DEFAULT_AGENT || 'SpiritAgent',
+    defaultChannel: process.env.MOLTBOT_HOOK_CHANNEL || 'last'
   }
 };
 
@@ -73,6 +80,58 @@ async function callAI(message: string): Promise<string> {
   } catch (error) {
     console.error('[AI] 调用失败:', error);
     return '[精灵1号] AI 服务连接失败';
+  }
+}
+
+// ============================
+// 调用 Moltbot Gateway Hook
+// ============================
+type MoltbotAgentResult = {
+  ok: boolean;
+  runId?: string;
+  error?: string;
+};
+
+async function callMoltbotAgent(params: {
+  message: string;
+  name?: string;
+  sessionKey?: string;
+}): Promise<MoltbotAgentResult> {
+  if (!config.moltbot.gatewayUrl || !config.moltbot.hookToken) {
+    return { ok: false, error: 'Moltbot 未配置' };
+  }
+
+  const base = config.moltbot.gatewayUrl.replace(/\/+$/, '');
+  const path = config.moltbot.hookPath.startsWith('/')
+    ? config.moltbot.hookPath
+    : `/${config.moltbot.hookPath}`;
+  const url = `${base}${path}/agent`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.moltbot.hookToken}`
+      },
+      body: JSON.stringify({
+        message: params.message,
+        name: params.name || config.moltbot.defaultAgentName,
+        sessionKey: params.sessionKey,
+        channel: config.moltbot.defaultChannel,
+        wakeMode: 'now',
+        deliver: true
+      })
+    });
+
+    const data = await response.json() as { ok?: boolean; runId?: string; error?: string };
+    if (response.ok && data.ok) {
+      return { ok: true, runId: data.runId };
+    }
+    return { ok: false, error: data.error || `HTTP ${response.status}` };
+  } catch (error) {
+    console.error('[Moltbot] 调用失败:', error);
+    return { ok: false, error: 'Moltbot 连接失败' };
   }
 }
 
@@ -142,42 +201,37 @@ app.post('/callback/feishu', async (req, res) => {
       
       console.log(`[飞书] 收到消息: "${textContent}" 来自用户: ${sender?.sender_id?.open_id}`);
       
+      // === Moltbot 指令 ===
+      const senderId = sender?.sender_id?.open_id || 'unknown';
+      if (textContent.startsWith('/agent ') || textContent.startsWith('/molt ')) {
+        const raw = textContent.replace(/^\/(agent|molt)\s+/i, '').trim();
+        const [maybeName, ...rest] = raw.split(/\s+/);
+        const hasExplicitName = textContent.startsWith('/agent ') && rest.length > 0;
+        const agentName = hasExplicitName ? maybeName : config.moltbot.defaultAgentName;
+        const agentMessage = hasExplicitName ? rest.join(' ') : raw;
+        const sessionKey = `feishu:${senderId}:${agentName}`;
+
+        const result = await callMoltbotAgent({
+          message: agentMessage,
+          name: agentName,
+          sessionKey
+        });
+
+        const reply = result.ok
+          ? `✅ 已派发给 Moltbot Agent: ${agentName}\nRunId: ${result.runId || 'N/A'}`
+          : `⚠️ Moltbot 调用失败：${result.error || '未知错误'}`;
+
+        await replyFeishuMessage(message.message_id, reply);
+        res.json({ code: 0 });
+        return;
+      }
+
       // 调用 AI 生成回复
       console.log('[飞书] 调用 AI 生成回复...');
       const reply = await callAI(textContent);
       console.log('[飞书] AI 回复:', reply);
       
-      // 回复消息（需要 tenant_access_token）
-      try {
-        // 获取 token
-        const tokenRes = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            app_id: config.feishu.appId,
-            app_secret: config.feishu.appSecret
-          })
-        });
-        const tokenData = await tokenRes.json() as { tenant_access_token?: string };
-        
-        if (tokenData.tenant_access_token) {
-          // 回复消息
-          await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${message.message_id}/reply`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${tokenData.tenant_access_token}`
-            },
-            body: JSON.stringify({
-              msg_type: 'text',
-              content: JSON.stringify({ text: reply })
-            })
-          });
-          console.log('[飞书] 已回复消息');
-        }
-      } catch (replyError) {
-        console.error('[飞书] 回复消息失败:', replyError);
-      }
+      await replyFeishuMessage(message.message_id, reply);
     }
     
     // 返回成功
@@ -188,6 +242,40 @@ app.post('/callback/feishu', async (req, res) => {
     res.status(500).json({ code: -1, msg: '处理失败' });
   }
 });
+
+// ============================
+// 飞书回复封装
+// ============================
+async function replyFeishuMessage(messageId: string, reply: string): Promise<void> {
+  try {
+    const tokenRes = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_id: config.feishu.appId,
+        app_secret: config.feishu.appSecret
+      })
+    });
+    const tokenData = await tokenRes.json() as { tenant_access_token?: string };
+
+    if (tokenData.tenant_access_token) {
+      await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${messageId}/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokenData.tenant_access_token}`
+        },
+        body: JSON.stringify({
+          msg_type: 'text',
+          content: JSON.stringify({ text: reply })
+        })
+      });
+      console.log('[飞书] 已回复消息');
+    }
+  } catch (replyError) {
+    console.error('[飞书] 回复消息失败:', replyError);
+  }
+}
 
 // ============================
 // 企业微信回调（预留）
