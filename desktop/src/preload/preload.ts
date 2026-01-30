@@ -112,7 +112,10 @@ const spiritAPI = {
       freeMemory: string;
       nodeVersion: string;
       electronVersion: string;
-    }> => ipcRenderer.invoke('system-info')
+    }> => ipcRenderer.invoke('system-info'),
+    
+    // 获取应用版本
+    getVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version')
   },
 
   // ==================== 联网能力 ====================

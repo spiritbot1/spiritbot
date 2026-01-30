@@ -235,6 +235,10 @@ export default function App() {
       const info = await window.spirit.system.getInfo()
       setSystemInfo(info)
       
+      // 获取应用版本
+      const version = await window.spirit.system.getVersion()
+      setAppVersion(version)
+      
       // 检查 Moltbot 状态
       const moltbot = await window.spirit.moltbot.status()
       setMoltbotStatus(moltbot)
