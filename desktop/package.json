@@ -1,6 +1,6 @@
 {
   "name": "spirit-one-desktop",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "精灵1号 - 你的数字生命伴侣 (桌面版)",
   "main": "out/main/main.js",
   "author": "Spirit One Team",
@@ -20,7 +20,8 @@
     "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "electron-updater": "^6.7.3"
+    "electron-updater": "^6.3.9",
+    "playwright-core": "^1.58.1"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.0",
@@ -42,8 +43,22 @@
       "output": "release"
     },
     "files": [
-      "out/**/*",
-      "!node_modules/**/*"
+      "out/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/electron-updater/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../libs/moltbot",
+        "to": "moltbot",
+        "filter": [
+          "dist/**/*",
+          "node_modules/**/*",
+          "package.json",
+          "moltbot.mjs"
+        ]
+      }
     ],
     "publish": {
       "provider": "github",

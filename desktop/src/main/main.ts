@@ -1,6 +1,8 @@
 /**
  * 精灵1号 桌面版 - 主进程
  * Spirit One Desktop - Main Process
+ * 
+ * 集成 Moltbot 作为 Agent 引擎
  */
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, Notification } from 'electron'
@@ -8,11 +10,296 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import { join, resolve, basename, dirname } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, copyFileSync, renameSync } from 'fs'
-import { exec, spawn } from 'child_process'
+import { exec, spawn, ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import { homedir, platform, hostname, cpus, totalmem, freemem } from 'os'
 
 const execAsync = promisify(exec)
+
+// ==================== Moltbot 完整集成（通过子进程）====================
+
+// Moltbot 路径
+const MOLTBOT_PATH = is.dev
+  ? resolve(__dirname, '../../../libs/moltbot')
+  : join(process.resourcesPath, 'moltbot')
+
+// 灵魂文件路径
+const SOUL_BRIDGE_PATH = is.dev
+  ? resolve(__dirname, '../../../soul-bridge')
+  : join(process.resourcesPath, 'soul-bridge')
+
+// Moltbot 工作区路径
+const CLAWD_DIR = join(homedir(), 'clawd')
+
+// Moltbot 进程状态
+let moltbotReady = false
+let moltbotProcess: ReturnType<typeof spawn> | null = null
+
+// Moltbot Agent 目录
+const MOLTBOT_AGENT_DIR = join(homedir(), '.clawdbot', 'agents', 'main', 'agent')
+
+/**
+ * 配置 Moltbot 的 auth-profiles.json
+ * 将 API Key 写入 Moltbot 的认证配置文件
+ */
+function configureMoltbotAuth(provider: string, apiKey: string): { ok: boolean; error?: string } {
+  console.log('[Spirit] 配置 Moltbot 认证...')
+  console.log('[Spirit] Provider:', provider)
+  
+  try {
+    // 确保目录存在
+    if (!existsSync(MOLTBOT_AGENT_DIR)) {
+      mkdirSync(MOLTBOT_AGENT_DIR, { recursive: true })
+      console.log('[Spirit] 创建 Moltbot agent 目录')
+    }
+    
+    const authPath = join(MOLTBOT_AGENT_DIR, 'auth-profiles.json')
+    
+    // 确定 provider key
+    let providerKey = 'openai'  // 默认使用 OpenAI 兼容接口
+    let profileId = 'spirit-key'
+    let label = 'Spirit One API Key'
+    
+    switch (provider) {
+      case 'siliconflow':
+        providerKey = 'openai'  // SiliconFlow 兼容 OpenAI 接口
+        profileId = 'openai-siliconflow'
+        label = 'SiliconFlow (DeepSeek V3)'
+        break
+      case 'openrouter':
+        providerKey = 'openrouter'
+        profileId = 'openrouter-key'
+        label = 'OpenRouter'
+        break
+      case 'anthropic':
+        providerKey = 'anthropic'
+        profileId = 'anthropic-key'
+        label = 'Anthropic Claude'
+        break
+      case 'deepseek':
+        providerKey = 'deepseek'
+        profileId = 'deepseek-key'
+        label = 'DeepSeek'
+        break
+      case 'openai':
+        providerKey = 'openai'
+        profileId = 'openai-key'
+        label = 'OpenAI'
+        break
+      default:
+        providerKey = 'openai'
+        profileId = `${provider}-key`
+        label = provider
+    }
+    
+    // 构建 auth-profiles.json
+    const authConfig = {
+      version: 3,
+      profiles: {
+        [profileId]: {
+          type: 'api_key',
+          provider: providerKey,
+          key: apiKey,  // 注意: Moltbot 用 "key" 字段，不是 "apiKey"
+          label: label
+        }
+      },
+      order: {
+        [providerKey]: [profileId]
+      }
+    }
+    
+    writeFileSync(authPath, JSON.stringify(authConfig, null, 2))
+    
+    // 设置权限（仅 owner 可读写）
+    try {
+      const fs = require('fs')
+      fs.chmodSync(authPath, 0o600)
+    } catch {
+      // Windows 等不支持 chmod
+    }
+    
+    console.log('[Spirit] ✅ Moltbot 认证配置完成:', profileId)
+    return { ok: true }
+    
+  } catch (error) {
+    console.error('[Spirit] Moltbot 认证配置失败:', error)
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
+/**
+ * 注入精灵灵魂到 Moltbot 工作区
+ * 将 soul-bridge/SOUL.md 和 AGENTS.md 复制到 ~/clawd/
+ */
+function injectSpiritSoul(): { ok: boolean; message: string } {
+  console.log('[Spirit] 开始注入精灵灵魂...')
+  console.log('[Spirit] 灵魂源路径:', SOUL_BRIDGE_PATH)
+  console.log('[Spirit] 目标路径:', CLAWD_DIR)
+  
+  try {
+    // 确保 ~/clawd/ 目录存在
+    if (!existsSync(CLAWD_DIR)) {
+      mkdirSync(CLAWD_DIR, { recursive: true })
+      console.log('[Spirit] 创建 clawd 目录')
+    }
+    
+    // 复制 SOUL.md
+    const soulSrc = join(SOUL_BRIDGE_PATH, 'SOUL.md')
+    const soulDest = join(CLAWD_DIR, 'SOUL.md')
+    
+    if (existsSync(soulSrc)) {
+      copyFileSync(soulSrc, soulDest)
+      console.log('[Spirit] ✅ SOUL.md 已注入')
+    } else {
+      console.log('[Spirit] ⚠️ SOUL.md 源文件不存在:', soulSrc)
+    }
+    
+    // 复制 AGENTS.md
+    const agentsSrc = join(SOUL_BRIDGE_PATH, 'AGENTS.md')
+    const agentsDest = join(CLAWD_DIR, 'AGENTS.md')
+    
+    if (existsSync(agentsSrc)) {
+      copyFileSync(agentsSrc, agentsDest)
+      console.log('[Spirit] ✅ AGENTS.md 已注入')
+    } else {
+      console.log('[Spirit] ⚠️ AGENTS.md 源文件不存在:', agentsSrc)
+    }
+    
+    console.log('[Spirit] 🌸 精灵灵魂注入完成！')
+    return { ok: true, message: '灵魂注入成功' }
+    
+  } catch (error) {
+    console.error('[Spirit] 灵魂注入失败:', error)
+    return { ok: false, message: (error as Error).message }
+  }
+}
+
+/**
+ * 初始化 Moltbot（检查环境）
+ */
+async function initMoltbot(): Promise<{ ok: boolean; error?: string }> {
+  console.log('[Spirit] 检查 Moltbot 环境...')
+  console.log('[Spirit] Moltbot 路径:', MOLTBOT_PATH)
+  
+  // 检查 Moltbot 文件是否存在
+  const moltbotMjs = join(MOLTBOT_PATH, 'moltbot.mjs')
+  
+  if (!existsSync(moltbotMjs)) {
+    console.log('[Spirit] Moltbot 文件不存在:', moltbotMjs)
+    return { ok: false, error: 'Moltbot 文件不存在' }
+  }
+  
+  // 检查 Node.js
+  try {
+    const { stdout } = await execAsync('node --version')
+    const version = stdout.trim()
+    console.log('[Spirit] 系统 Node.js 版本:', version)
+    
+    const major = parseInt(version.slice(1).split('.')[0])
+    if (major >= 20) {
+      moltbotReady = true
+      console.log('[Spirit] ✅ Moltbot 环境就绪')
+      // Gateway 由 Moltbot 自己管理（moltbot gateway install）
+      mainWindow?.webContents.send('moltbot-ready')
+      return { ok: true }
+    } else {
+      console.log('[Spirit] ⚠️ Node.js 版本过低，Moltbot 高级功能受限')
+      return { ok: false, error: `Node.js 版本过低 (${version})，需要 20+` }
+    }
+  } catch {
+    console.log('[Spirit] 未检测到系统 Node.js')
+    return { ok: false, error: '未检测到系统 Node.js' }
+  }
+}
+
+/**
+ * 调用 Moltbot 命令
+ */
+async function callMoltbot(command: string, args: string[] = []): Promise<{
+  ok: boolean;
+  output?: string;
+  error?: string;
+}> {
+  const moltbotMjs = join(MOLTBOT_PATH, 'moltbot.mjs')
+  
+  if (!existsSync(moltbotMjs)) {
+    return { ok: false, error: 'Moltbot 未安装' }
+  }
+  
+  return new Promise((resolve) => {
+    try {
+      const fullArgs = [moltbotMjs, command, ...args]
+      console.log('[Spirit] 执行 Moltbot:', 'node', fullArgs.join(' '))
+      
+      const proc = spawn('node', fullArgs, {
+        cwd: MOLTBOT_PATH,
+        env: { ...process.env, PATH: process.env.PATH },
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+      
+      let stdout = ''
+      let stderr = ''
+      
+      proc.stdout?.on('data', (data) => {
+        stdout += data.toString()
+      })
+      
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString()
+      })
+      
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve({ ok: true, output: stdout })
+        } else {
+          resolve({ ok: false, error: stderr || `退出码: ${code}`, output: stdout })
+        }
+      })
+      
+      proc.on('error', (err) => {
+        resolve({ ok: false, error: err.message })
+      })
+      
+      // 30秒超时
+      setTimeout(() => {
+        proc.kill()
+        resolve({ ok: false, error: '执行超时' })
+      }, 30000)
+      
+    } catch (error) {
+      resolve({ ok: false, error: (error as Error).message })
+    }
+  })
+}
+
+/**
+ * 执行 Bash 命令
+ */
+async function moltbotBashExec(command: string, cwd?: string): Promise<{
+  ok: boolean;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}> {
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: cwd || homedir(),
+      timeout: 60000,
+      maxBuffer: 10 * 1024 * 1024,
+      shell: platform() === 'win32' ? 'powershell.exe' : '/bin/zsh'
+    })
+    
+    return { ok: true, stdout, stderr }
+  } catch (error: unknown) {
+    const execError = error as { stdout?: string; stderr?: string; message?: string }
+    return {
+      ok: false,
+      error: execError.message || '执行失败',
+      stdout: execError.stdout || '',
+      stderr: execError.stderr || ''
+    }
+  }
+}
 
 // 简单的配置存储（使用 JSON 文件）
 class SimpleStore {
@@ -755,7 +1042,7 @@ function registerIpcHandlers(): void {
         updateInfo: result?.updateInfo 
       }
     } catch (error) {
-      return { success: false, error: (error as Error).message }
+      return { success: false, error: (error as Error).message, currentVersion: app.getVersion() }
     }
   })
 
@@ -805,66 +1092,208 @@ function registerIpcHandlers(): void {
       return { success: false, error: (error as Error).message, news: [] }
     }
   })
+
+  // ==================== Moltbot Agent 能力 ====================
+  
+  // 初始化 Moltbot
+  ipcMain.handle('moltbot-init', async () => {
+    return initMoltbot()
+  })
+  
+  // Moltbot 状态
+  ipcMain.handle('moltbot-status', () => {
+    return { 
+      ready: moltbotReady,
+      path: MOLTBOT_PATH
+    }
+  })
+  
+  // 调用 Moltbot 命令
+  ipcMain.handle('moltbot-call', async (_, command: string, args?: string[]) => {
+    return callMoltbot(command, args)
+  })
+  
+  // Bash 执行
+  ipcMain.handle('moltbot-bash', async (_, command: string, cwd?: string) => {
+    return moltbotBashExec(command, cwd)
+  })
+}
+
+// ==================== Moltbot Agent 集成 ====================
+// 注意：工具能力由 Moltbot 提供，不再需要手动定义
+
+// executeToolCall 已删除 - 工具执行由 Moltbot 处理
+
+/**
+ * 构建 Moltbot 环境变量
+ * 根据用户配置的提供商设置对应的 API Key
+ */
+function buildMoltbotEnv(provider: string, apiKey: string): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  
+  switch (provider) {
+    case 'siliconflow':
+      // 硅基流动 - 设置为 siliconflow provider 的 API Key
+      // 同时设置 OPENAI 兼容变量作为后备
+      env.SILICONFLOW_API_KEY = apiKey
+      env.OPENAI_API_KEY = apiKey
+      env.OPENAI_BASE_URL = 'https://api.siliconflow.cn/v1'
+      break
+    case 'openrouter':
+      env.OPENROUTER_API_KEY = apiKey
+      break
+    case 'openai':
+      env.OPENAI_API_KEY = apiKey
+      break
+    case 'anthropic':
+      env.ANTHROPIC_API_KEY = apiKey
+      break
+    case 'deepseek':
+      env.DEEPSEEK_API_KEY = apiKey
+      break
+    case 'moonshot':
+      env.OPENAI_API_KEY = apiKey
+      env.OPENAI_BASE_URL = 'https://api.moonshot.cn/v1'
+      break
+    default:
+      // 默认当作 OpenAI 兼容接口
+      env.OPENAI_API_KEY = apiKey
+  }
+  
+  return env
 }
 
 /**
- * 调用 AI API
+ * 调用 Moltbot Agent
+ * 通过子进程调用 moltbot agent 命令
  */
 async function callAI(message: string, provider: string, apiKey: string): Promise<{
   success: boolean;
   content?: string;
   error?: string;
+  toolCalls?: Array<{ name: string; args: Record<string, string>; result: string }>;
 }> {
-  const endpoints: Record<string, string> = {
-    siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
-    deepseek: 'https://api.deepseek.com/v1/chat/completions',
-    openai: 'https://api.openai.com/v1/chat/completions',
-    moonshot: 'https://api.moonshot.cn/v1/chat/completions'
+  console.log('[Spirit] 调用 Moltbot Agent...')
+  console.log('[Spirit] Provider:', provider)
+  console.log('[Spirit] Message:', message.slice(0, 100) + (message.length > 100 ? '...' : ''))
+  
+  // 检查 Moltbot 是否就绪
+  if (!moltbotReady) {
+    console.log('[Spirit] Moltbot 未就绪，尝试初始化...')
+    const initResult = await initMoltbot()
+    if (!initResult.ok) {
+      return { success: false, error: `Moltbot 未就绪: ${initResult.error}` }
+    }
   }
   
-  const models: Record<string, string> = {
-    siliconflow: 'deepseek-ai/DeepSeek-V3',
-    deepseek: 'deepseek-chat',
-    openai: 'gpt-4o-mini',
-    moonshot: 'moonshot-v1-8k'
+  const moltbotMjs = join(MOLTBOT_PATH, 'moltbot.mjs')
+  
+  if (!existsSync(moltbotMjs)) {
+    return { success: false, error: 'Moltbot 未安装' }
   }
   
-  const spiritName = initStore().get('spiritName') as string
-  const url = endpoints[provider] || endpoints.siliconflow
-  const model = models[provider] || models.siliconflow
+  // 配置 Moltbot 认证（关键！Moltbot 读取 auth-profiles.json 而不是环境变量）
+  const authResult = configureMoltbotAuth(provider, apiKey)
+  if (!authResult.ok) {
+    console.error('[Spirit] 认证配置失败:', authResult.error)
+    // 继续尝试，可能已有配置
+  }
   
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: `你是${spiritName}，一个友好、智能的数字精灵伙伴。你的回复要简洁、有帮助、有温度。`
-        },
-        {
-          role: 'user',
-          content: message
+  return new Promise((resolve) => {
+    try {
+      // 构建环境变量（作为备用）
+      const env = buildMoltbotEnv(provider, apiKey)
+      
+      // 每次启动精灵使用新 session，避免"记得但看不到"的问题
+      // 如果需要连续对话，应该在 UI 层面加载历史消息
+      const sessionId = `spirit-${Date.now()}`
+      
+      // 调用 Moltbot Agent
+      const args = [
+        moltbotMjs,
+        'agent',
+        '--agent', 'main',
+        '--session-id', sessionId,  // 每次新 session，避免缓存
+        '--message', message,
+        '--local',  // 本地模式
+        '--json'    // JSON 输出
+      ]
+      
+      console.log('[Spirit] 执行:', 'node', args.join(' ').slice(0, 100) + '...')
+      
+      const proc = spawn('node', args, {
+        cwd: MOLTBOT_PATH,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+      
+      let stdout = ''
+      let stderr = ''
+      
+      proc.stdout?.on('data', (data) => {
+        stdout += data.toString()
+      })
+      
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString()
+        // 打印 stderr 以便调试
+        console.log('[Moltbot stderr]:', data.toString().trim())
+      })
+      
+      proc.on('close', (code) => {
+        console.log('[Spirit] Moltbot 退出码:', code)
+        
+        if (code === 0 && stdout) {
+          try {
+            // 从输出中提取 JSON（Moltbot 输出可能包含 Doctor warnings 等前缀）
+            const jsonMatch = stdout.match(/\{[\s\S]*\}/)
+            if (!jsonMatch) {
+              console.log('[Spirit] 无法找到 JSON 输出')
+              resolve({ success: true, content: stdout.trim() || '已完成' })
+              return
+            }
+            
+            const result = JSON.parse(jsonMatch[0]) as {
+              ok?: boolean;
+              payloads?: Array<{ text?: string; mediaUrls?: string[] }>;
+              summary?: string;
+              error?: string;
+            }
+            
+            // 提取回复内容（payloads 存在即为成功）
+            const content = result.payloads?.[0]?.text || result.summary || 'Moltbot 已完成任务。'
+            console.log('[Spirit] Moltbot 成功:', content.slice(0, 200) + (content.length > 200 ? '...' : ''))
+            resolve({ success: true, content })
+            
+          } catch (parseError) {
+            // JSON 解析失败，可能是非 JSON 输出
+            console.log('[Spirit] JSON 解析失败:', parseError)
+            resolve({ success: true, content: stdout.trim() || '已完成' })
+          }
+        } else {
+          // 执行失败
+          const errorMsg = stderr || `Moltbot 退出码: ${code}`
+          console.error('[Spirit] Moltbot 失败:', errorMsg)
+          resolve({ success: false, error: errorMsg })
         }
-      ],
-      max_tokens: 1024
-    })
+      })
+      
+      proc.on('error', (err) => {
+        console.error('[Spirit] Moltbot 进程错误:', err)
+        resolve({ success: false, error: err.message })
+      })
+      
+      // 2 分钟超时
+      setTimeout(() => {
+        proc.kill()
+        resolve({ success: false, error: '执行超时（2分钟）' })
+      }, 120000)
+      
+    } catch (error) {
+      console.error('[Spirit] 调用 Moltbot 异常:', error)
+      resolve({ success: false, error: (error as Error).message })
+    }
   })
-  
-  const data = await response.json() as {
-    choices?: Array<{ message?: { content?: string } }>;
-    error?: { message?: string };
-  }
-  
-  if (data.choices?.[0]?.message?.content) {
-    return { success: true, content: data.choices[0].message.content }
-  }
-  
-  return { success: false, error: data.error?.message || '调用失败' }
 }
 
 // 扩展 app 类型
@@ -971,12 +1400,33 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // 🌸 注入精灵灵魂（首先执行）
+  const soulResult = injectSpiritSoul()
+  if (soulResult.ok) {
+    console.log('[Spirit] 🌸 精灵灵魂已注入到 Moltbot 工作区')
+  } else {
+    console.warn('[Spirit] ⚠️ 灵魂注入失败:', soulResult.message)
+  }
+
   // 注册 IPC
   registerIpcHandlers()
   
   // 创建窗口和托盘
   createWindow()
   createTray()
+  
+  console.log('[Spirit] 精灵1号已启动！')
+  
+  // 初始化 Moltbot（后台）
+  initMoltbot().then((result) => {
+    if (result.ok) {
+      console.log('[Spirit] ✅ Moltbot Agent 引擎就绪')
+      console.log('[Spirit] 🔧 能力: 浏览器自动化、Shell执行、联网搜索、文件操作、记忆系统')
+    } else {
+      console.warn('[Spirit] ⚠️ Moltbot 初始化失败:', result.error)
+      console.log('[Spirit] 💡 提示: 请确保系统已安装 Node.js 20+')
+    }
+  })
   
   // 设置自动更新（生产环境）
   if (!is.dev) {
@@ -1007,4 +1457,6 @@ app.on('window-all-closed', () => {
 // 应用退出前
 app.on('before-quit', () => {
   app.isQuitting = true
+  moltbotReady = false
+  // Gateway 由 Moltbot 服务管理，不需要手动停止
 })

@@ -166,6 +166,38 @@ const spiritAPI = {
   selectFile: () => ipcRenderer.invoke('select-file'),
   checkFirstLaunch: () => ipcRenderer.invoke('check-first-launch'),
   
+  // ==================== Moltbot Agent 引擎（完整能力）====================
+  moltbot: {
+    // 初始化
+    init: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('moltbot-init'),
+    
+    // 状态
+    status: (): Promise<{ ready: boolean; path: string }> =>
+      ipcRenderer.invoke('moltbot-status'),
+    
+    // 调用 Moltbot 命令
+    call: (command: string, args?: string[]): Promise<{
+      ok: boolean;
+      output?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('moltbot-call', command, args),
+    
+    // Bash 执行
+    bash: (command: string, cwd?: string): Promise<{
+      ok: boolean;
+      stdout?: string;
+      stderr?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('moltbot-bash', command, cwd),
+    
+    // 事件
+    onReady: (callback: () => void) => {
+      ipcRenderer.on('moltbot-ready', callback)
+      return () => ipcRenderer.removeListener('moltbot-ready', callback)
+    }
+  },
+  
   // ==================== 事件监听 ====================
   onOpenSettings: (callback: () => void) => {
     ipcRenderer.on('open-settings', callback)

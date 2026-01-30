@@ -71,7 +71,12 @@ declare global {
       minimize: () => Promise<void>
       close: () => Promise<void>
       togglePin: () => Promise<boolean>
-      callAI: (params: { message: string }) => Promise<{ success: boolean; content?: string; error?: string }>
+      callAI: (params: { message: string }) => Promise<{ 
+        success: boolean; 
+        content?: string; 
+        error?: string;
+        toolCalls?: Array<{ name: string; args: Record<string, string>; result: string }>
+      }>
       saveApiKey: (provider: string, apiKey: string) => Promise<boolean>
       openExternal: (url: string) => Promise<void>
       checkFirstLaunch: () => Promise<boolean>
@@ -141,6 +146,23 @@ declare global {
           error?: string
         }>
       }
+      // Moltbot Agent 引擎
+      moltbot: {
+        init: () => Promise<{ ok: boolean; error?: string }>
+        status: () => Promise<{ ready: boolean; path: string }>
+        call: (command: string, args?: string[]) => Promise<{
+          ok: boolean
+          output?: string
+          error?: string
+        }>
+        bash: (command: string, cwd?: string) => Promise<{
+          ok: boolean
+          stdout?: string
+          stderr?: string
+          error?: string
+        }>
+        onReady: (callback: () => void) => () => void
+      }
     }
   }
 }
@@ -157,6 +179,7 @@ export default function App() {
   const [files, setFiles] = useState<FileInfo[]>([])
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [appVersion, setAppVersion] = useState<string>('0.5.0')
+  const [moltbotStatus, setMoltbotStatus] = useState<{ ready: boolean; path: string } | null>(null)
   
   // 引用
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -211,6 +234,11 @@ export default function App() {
     try {
       const info = await window.spirit.system.getInfo()
       setSystemInfo(info)
+      
+      // 检查 Moltbot 状态
+      const moltbot = await window.spirit.moltbot.status()
+      setMoltbotStatus(moltbot)
+      console.log('Moltbot 状态:', moltbot)
     } catch (error) {
       console.error('获取系统信息失败:', error)
     }
@@ -324,10 +352,21 @@ export default function App() {
 
     // ==================== 联网能力 ====================
     
-    // 联网搜索
-    if (lowerText.startsWith('搜索 ') || lowerText.startsWith('search ') || lowerText.startsWith('查询 ')) {
-      const query = text.replace(/^(搜索 |search |查询 )/i, '').trim()
-      addMessage('system', `🔍 正在搜索: ${query}`)
+    // 联网搜索 - 更智能的匹配
+    const searchPatterns = ['搜索', '搜一下', '查一下', '查询', '百度', '谷歌', '找一下', '帮我找', 'search']
+    const hasSearchKeyword = searchPatterns.some(p => lowerText.includes(p))
+    
+    if (hasSearchKeyword) {
+      const query = text
+        .replace(/(搜索|搜一下|查一下|查询|百度|谷歌|找一下|帮我找|search|请|帮我|一下)/gi, '')
+        .trim()
+      
+      if (query.length < 2) {
+        addMessage('spirit', `🔍 请告诉我你想搜索什么？比如：\`搜索 Python教程\``)
+        return true
+      }
+      
+      addMessage('system', `🔍 正在联网搜索: ${query}`)
       const result = await window.spirit.web.search(query)
       if (result.success && result.results && result.results.length > 0) {
         let content = `🔍 **搜索结果: ${query}**\n\n`
@@ -341,11 +380,22 @@ export default function App() {
       return true
     }
 
-    // 天气查询
-    if (lowerText.startsWith('天气 ') || lowerText.startsWith('weather ') || 
-        lowerText.includes('天气怎么样') || lowerText.includes('天气如何')) {
-      let city = text.replace(/^(天气 |weather )/i, '').replace(/(天气怎么样|天气如何|的天气)/g, '').trim()
-      if (!city || city.length < 2) city = '北京'
+    // 天气查询 - 更智能的匹配
+    const weatherPatterns = ['天气', '气温', '温度', '下雨', '下雪', '晴天', '阴天', '多云', '穿什么']
+    const hasWeatherKeyword = weatherPatterns.some(p => lowerText.includes(p))
+    
+    if (lowerText.startsWith('天气 ') || lowerText.startsWith('weather ') || hasWeatherKeyword) {
+      // 提取城市名（支持多种格式）
+      let city = text
+        .replace(/^(天气 |weather )/i, '')
+        .replace(/(的?天气.*|气温.*|温度.*|今天|明天|现在|怎么样|如何|情况|查询|查一下|帮我|请问)/g, '')
+        .trim()
+      
+      // 如果没有提取到城市，尝试从文本中找城市名
+      if (!city || city.length < 2) {
+        const cityMatch = text.match(/(北京|上海|广州|深圳|杭州|成都|重庆|武汉|西安|南京|天津|苏州|郑州|长沙|东莞|沈阳|青岛|合肥|佛山|宁波|昆明|哈尔滨|大连|厦门|济南|福州|温州|无锡|石家庄|珠海|海口|三亚|贵阳|太原|拉萨|乌鲁木齐|香港|澳门|台北)/);
+        city = cityMatch ? cityMatch[1] : '北京'
+      }
       
       addMessage('system', `🌤 正在查询 ${city} 天气...`)
       const result = await window.spirit.web.weather(city)
@@ -408,11 +458,48 @@ export default function App() {
       return true
     }
     
+    // Moltbot 命令
+    if (lowerText === 'moltbot' || lowerText === 'moltbot状态' || lowerText.includes('moltbot 状态')) {
+      const status = await window.spirit.moltbot.status()
+      addMessage('spirit', `🤖 **Moltbot Agent 引擎**
+
+| 项目 | 状态 |
+|------|------|
+| 引擎状态 | ${status.ready ? '✅ 就绪' : '❌ 未就绪'} |
+| 路径 | \`${status.path}\` |
+
+${status.ready 
+  ? '**可用命令:**\n- `moltbot bash <命令>` - 执行 bash 命令\n- `moltbot help` - 查看帮助'
+  : '**提示:** Moltbot 需要系统安装 Node.js 20+ 才能使用高级功能'}`)
+      return true
+    }
+    
+    // Moltbot bash 执行
+    if (lowerText.startsWith('moltbot bash ') || lowerText.startsWith('moltbot run ')) {
+      const command = text.replace(/^moltbot (bash|run) /i, '').trim()
+      if (!command) {
+        addMessage('spirit', '❌ 请输入要执行的命令，例如: `moltbot bash ls -la`')
+        return true
+      }
+      
+      addMessage('system', `🤖 Moltbot 执行: ${command}`)
+      const result = await window.spirit.moltbot.bash(command, currentPath)
+      
+      if (result.ok) {
+        const output = (result.stdout || '').trim()
+        addMessage('spirit', output ? `\`\`\`\n${output}\n\`\`\`` : '✅ 命令已执行（无输出）')
+      } else {
+        addMessage('spirit', `❌ 执行失败: ${result.error}`)
+      }
+      return true
+    }
+    
     // 帮助
     if (lowerText === 'help' || lowerText === '帮助' || lowerText === '?') {
+      const status = moltbotStatus
       addMessage('spirit', `🌱 **精灵1号能力列表**
 
-**🌐 联网能力** ✨新增
+**🌐 联网能力**
 - \`搜索 <关键词>\` - 联网搜索信息
 - \`天气 <城市>\` - 查询真实天气
 - \`新闻\` - 获取今日新闻
@@ -426,6 +513,10 @@ export default function App() {
 
 **⚡ 命令执行**
 - \`$ <命令>\` 或 \`run <命令>\` - 执行Shell命令
+
+**🤖 Moltbot 引擎** ${status?.ready ? '✅' : '⚠️'}
+- \`moltbot\` - 查看引擎状态
+- \`moltbot bash <命令>\` - 执行 bash 命令
 
 **💻 系统**
 - \`系统信息\` - 查看系统状态
@@ -455,10 +546,34 @@ export default function App() {
       const isCommand = await parseAndExecuteCommand(text)
       
       if (!isCommand) {
-        // 不是命令，调用 AI
+        // 调用 AI Agent
+        addMessage('system', '🤔 正在思考...')
         const result = await window.spirit.callAI({ message: text })
         
+        // 移除"正在思考"消息
+        setMessages(prev => prev.filter(m => m.content !== '🤔 正在思考...'))
+        
         if (result.success && result.content) {
+          // 如果 AI 使用了工具，显示工具调用过程
+          if (result.toolCalls && result.toolCalls.length > 0) {
+            const toolSummary = result.toolCalls.map(tc => {
+              const toolNames: Record<string, string> = {
+                search_web: '🔍 联网搜索',
+                get_weather: '🌤 天气查询',
+                read_file: '📄 读取文件',
+                write_file: '✏️ 写入文件',
+                list_directory: '📁 列目录',
+                run_command: '⚡ 执行命令',
+                get_system_info: '💻 系统信息',
+                fetch_webpage: '🌐 抓取网页',
+                open_application: '🚀 打开应用'
+              }
+              return `${toolNames[tc.name] || tc.name}: ${JSON.stringify(tc.args).slice(0, 50)}`
+            }).join('\n')
+            
+            addMessage('system', `🛠 使用了 ${result.toolCalls.length} 个工具:\n${toolSummary}`)
+          }
+          
           addMessage('spirit', result.content)
         } else {
           const spiritStyle = config ? SPIRIT_STYLES[config.spiritStyle] : SPIRIT_STYLES.cute
