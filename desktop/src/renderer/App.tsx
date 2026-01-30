@@ -156,6 +156,7 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState('')
   const [files, setFiles] = useState<FileInfo[]>([])
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
+  const [appVersion, setAppVersion] = useState<string>('0.5.0')
   
   // 引用
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -545,7 +546,7 @@ export default function App() {
           </div>
           <div className="title-info">
             <span className="spirit-name">{spiritName}</span>
-            <span className="spirit-status">在线 · {systemInfo?.platform || '...'}</span>
+            <span className="spirit-status">v{appVersion} · {systemInfo?.platform || '...'}</span>
           </div>
         </div>
         <div className="title-bar-buttons">
