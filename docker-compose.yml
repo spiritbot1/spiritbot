@@ -1,42 +1,75 @@
-# 精灵1号 v2.0 - Docker 联合编排
-# Moltbot + 精灵1号 深度集成
+# 精灵1号 v0.3.0 - Docker 联合编排
+# Spirit One Gateway + Core + Moltbot
 
 version: '3.8'
 
 services:
   # ========================
-  # Moltbot Gateway - 执行引擎
+  # 精灵1号 Gateway - 统一入口
   # ========================
-  moltbot-gateway:
+  spirit-gateway:
     build:
-      context: ../moltbot-core
+      context: .
       dockerfile: Dockerfile
     container_name: spirit-one-gateway
     ports:
-      - "18789:18789"  # Gateway 端口
-      - "3000:3000"    # Web UI 端口
+      - "3100:3100"
     environment:
       - NODE_ENV=production
-      - GATEWAY_PORT=18789
-      - GATEWAY_BIND=0.0.0.0
-      # API Keys (从 .env 文件读取)
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GATEWAY_PORT=3100
+      # 飞书配置
+      - FEISHU_APP_ID=${FEISHU_APP_ID}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET}
+      - FEISHU_VERIFICATION_TOKEN=${FEISHU_VERIFICATION_TOKEN}
+      - FEISHU_ENCRYPT_KEY=${FEISHU_ENCRYPT_KEY}
+      # AI 配置
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
-      # 精灵1号配置
-      - SPIRIT_SOUL_PATH=/app/fusion/soul-bridge/SOUL.md
-      - SPIRIT_AGENTS_PATH=/app/fusion/soul-bridge/AGENTS.md
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Moltbot 连接
+      - MOLTBOT_GATEWAY_URL=http://moltbot-gateway:18789
+      - MOLTBOT_HOOK_TOKEN=${MOLTBOT_HOOK_TOKEN}
     volumes:
-      # 挂载精灵1号配置
-      - ../spirit-fusion:/app/fusion:ro
-      - ~/.clawdbot:/root/.clawdbot
-      # 挂载 workspace
-      - ~/clawd:/root/clawd
+      - ./logs:/app/logs
+    depends_on:
+      - moltbot-gateway
     networks:
       - spirit-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18789/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================
+  # Moltbot Gateway - 执行引擎
+  # ========================
+  moltbot-gateway:
+    image: node:20-alpine
+    container_name: spirit-moltbot
+    working_dir: /app
+    command: node libs/moltbot/moltbot.mjs gateway
+    ports:
+      - "18789:18789"
+    environment:
+      - NODE_ENV=production
+      - GATEWAY_PORT=18789
+      - GATEWAY_BIND=0.0.0.0
+      # API Keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+    volumes:
+      - ./libs/moltbot:/app/libs/moltbot:ro
+      - ./soul-bridge:/app/soul-bridge:ro
+      - moltbot-data:/root/.moltbot
+    networks:
+      - spirit-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:18789/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -44,24 +77,21 @@ services:
   # ========================
   # 精灵1号 Core - 智能大脑
   # ========================
-  central-brain:
+  spirit-core:
     build:
-      context: ../central-brain
+      context: ./core
       dockerfile: Dockerfile
-    container_name: spirit-one-brain
+    container_name: spirit-one-core
     ports:
-      - "4000:4000"  # API 端口
+      - "4000:4000"
     environment:
       - NODE_ENV=production
       - PORT=4000
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/spirit_one
       - REDIS_URL=redis://redis:6379
-      # 模型配置
-      - DEFAULT_MODEL=qwen-32b
-      - REASONING_MODEL=deepseek-r1
-      - CODING_MODEL=deepseek-v2.5
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
     volumes:
-      - brain-data:/app/data
+      - core-data:/app/data
     depends_on:
       - postgres
       - redis
@@ -121,7 +151,8 @@ networks:
     driver: bridge
 
 volumes:
-  brain-data:
+  core-data:
+  moltbot-data:
   postgres-data:
   redis-data:
   qdrant-data:

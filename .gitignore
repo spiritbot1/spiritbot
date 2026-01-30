@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+*/dist/
+**/dist/
+out/
+*/out/
+**/out/
+build/
+
+# Desktop app releases
+desktop/release/
+*.dmg
+*.zip
+*.exe
+*.AppImage
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Database
+*.db
+*.sqlite
+
+# OS files
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Test coverage
+coverage/
+
+# Lock files (optional - you might want to keep these)
+# package-lock.json
+# pnpm-lock.yaml
+
+# Moltbot dist (keep source, ignore compiled)
+libs/moltbot/dist/

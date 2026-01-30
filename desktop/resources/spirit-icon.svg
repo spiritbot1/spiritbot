@@ -1,0 +1,48 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 圆角矩形背景（深色，像 Cursor 一样） -->
+  <rect width="1024" height="1024" rx="228" fill="url(#bg_gradient)"/>
+  
+  <!-- 精灵身体：水滴形，居中 -->
+  <ellipse cx="512" cy="540" rx="220" ry="280" fill="url(#body_gradient)"/>
+  
+  <!-- 身体高光 -->
+  <ellipse cx="420" cy="420" rx="80" ry="120" fill="white" fill-opacity="0.15" transform="rotate(-15 420 420)"/>
+  
+  <!-- 左眼 -->
+  <ellipse cx="420" cy="520" rx="45" ry="55" fill="#0F172A"/>
+  <circle cx="432" cy="505" r="12" fill="white"/>
+  <circle cx="415" cy="540" r="6" fill="#60A5FA"/>
+  
+  <!-- 右眼 -->
+  <ellipse cx="604" cy="520" rx="45" ry="55" fill="#0F172A"/>
+  <circle cx="616" cy="505" r="12" fill="white"/>
+  <circle cx="599" cy="540" r="6" fill="#60A5FA"/>
+  
+  <!-- 微笑 -->
+  <path d="M460 620 Q512 660 564 620" stroke="#0F172A" stroke-width="12" stroke-linecap="round" fill="none"/>
+  
+  <!-- 头顶嫩芽（左） -->
+  <path d="M480 260 Q440 180 380 160 Q420 200 460 260" fill="#4ADE80"/>
+  
+  <!-- 头顶嫩芽（右） -->
+  <path d="M544 260 Q584 180 644 160 Q604 200 564 260" fill="#22C55E"/>
+  
+  <!-- 嫩芽茎 -->
+  <path d="M512 280 L512 320" stroke="#16A34A" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- 定义渐变 -->
+  <defs>
+    <!-- 深色背景渐变 -->
+    <linearGradient id="bg_gradient" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    
+    <!-- 精灵身体渐变（薄荷绿到蓝色） -->
+    <linearGradient id="body_gradient" x1="512" y1="260" x2="512" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="50%" stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+</svg>
