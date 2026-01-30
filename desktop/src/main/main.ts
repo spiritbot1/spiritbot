@@ -3,8 +3,9 @@
  * Spirit One Desktop - Main Process
  */
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, Notification } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { autoUpdater } from 'electron-updater'
 import { join, resolve, basename, dirname } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, copyFileSync, renameSync } from 'fs'
 import { exec, spawn } from 'child_process'
@@ -741,6 +742,28 @@ function registerIpcHandlers(): void {
     }
   })
 
+  // ==================== 自动更新 ====================
+  
+  // 手动检查更新
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      console.log('[Spirit] 手动检查更新...')
+      const result = await autoUpdater.checkForUpdates()
+      return { 
+        success: true, 
+        currentVersion: app.getVersion(),
+        updateInfo: result?.updateInfo 
+      }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 获取当前版本
+  ipcMain.handle('get-app-version', () => {
+    return app.getVersion()
+  })
+
   // 获取新闻（使用 RSS）
   ipcMain.handle('web-news', async (_, topic?: string) => {
     try {
@@ -853,6 +876,88 @@ declare module 'electron' {
 
 app.isQuitting = false
 
+// ==================== 自动更新配置 ====================
+function setupAutoUpdater(): void {
+  // 配置更新源（GitHub Releases）
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'spiritbot1',
+    repo: 'spiritbot'
+  })
+
+  // 检查更新出错
+  autoUpdater.on('error', (error) => {
+    console.error('[AutoUpdater] 检查更新失败:', error)
+  })
+
+  // 检查到更新
+  autoUpdater.on('update-available', (info) => {
+    console.log('[AutoUpdater] 发现新版本:', info.version)
+    
+    // 发送通知
+    if (Notification.isSupported()) {
+      new Notification({
+        title: '🌱 精灵1号有新版本',
+        body: `发现新版本 ${info.version}，正在下载...`,
+        icon: nativeImage.createEmpty()
+      }).show()
+    }
+    
+    // 通知渲染进程
+    mainWindow?.webContents.send('update-available', info)
+  })
+
+  // 没有更新
+  autoUpdater.on('update-not-available', () => {
+    console.log('[AutoUpdater] 当前已是最新版本')
+  })
+
+  // 下载进度
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[AutoUpdater] 下载进度: ${Math.round(progress.percent)}%`)
+    mainWindow?.webContents.send('update-progress', progress)
+  })
+
+  // 下载完成
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[AutoUpdater] 更新下载完成:', info.version)
+    
+    // 显示通知
+    if (Notification.isSupported()) {
+      new Notification({
+        title: '🎉 更新已就绪',
+        body: `新版本 ${info.version} 已下载完成，重启后生效`,
+        icon: nativeImage.createEmpty()
+      }).show()
+    }
+    
+    // 通知渲染进程
+    mainWindow?.webContents.send('update-downloaded', info)
+    
+    // 询问用户是否立即重启
+    dialog.showMessageBox({
+      type: 'info',
+      title: '更新已就绪',
+      message: `精灵1号 ${info.version} 已下载完成`,
+      detail: '重启应用以完成更新？',
+      buttons: ['立即重启', '稍后'],
+      defaultId: 0
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.quitAndInstall()
+      }
+    })
+  })
+
+  // 延迟检查更新（启动 5 秒后）
+  setTimeout(() => {
+    console.log('[AutoUpdater] 开始检查更新...')
+    autoUpdater.checkForUpdates().catch(err => {
+      console.error('[AutoUpdater] 检查更新失败:', err)
+    })
+  }, 5000)
+}
+
 // 应用准备就绪
 app.whenReady().then(() => {
   // 初始化配置存储
@@ -872,6 +977,11 @@ app.whenReady().then(() => {
   // 创建窗口和托盘
   createWindow()
   createTray()
+  
+  // 设置自动更新（生产环境）
+  if (!is.dev) {
+    setupAutoUpdater()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

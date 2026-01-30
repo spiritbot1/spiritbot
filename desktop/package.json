@@ -1,9 +1,10 @@
 {
   "name": "spirit-one-desktop",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "精灵1号 - 你的数字生命伴侣 (桌面版)",
   "main": "out/main/main.js",
   "author": "Spirit One Team",
+  "homepage": "https://github.com/spiritbot1/spiritbot",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
@@ -18,7 +19,9 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:linux": "npm run build && electron-builder --linux"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-updater": "^6.7.3"
+  },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
@@ -42,17 +45,29 @@
       "out/**/*",
       "!node_modules/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "spiritbot1",
+      "repo": "spiritbot",
+      "releaseType": "release"
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "resources/icon.icns",
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "hardenedRuntime": true,
@@ -80,7 +95,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -92,7 +109,10 @@
     },
     "linux": {
       "icon": "resources/icons",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility"
     }
   }
