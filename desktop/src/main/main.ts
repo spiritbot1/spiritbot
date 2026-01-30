@@ -5,8 +5,13 @@
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { join } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { join, resolve, basename, dirname } from 'path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, copyFileSync, renameSync } from 'fs'
+import { exec, spawn } from 'child_process'
+import { promisify } from 'util'
+import { homedir, platform, hostname, cpus, totalmem, freemem } from 'os'
+
+const execAsync = promisify(exec)
 
 // 简单的配置存储（使用 JSON 文件）
 class SimpleStore {
@@ -352,6 +357,206 @@ function registerIpcHandlers(): void {
       s.set('isFirstLaunch', false)
     }
     return isFirst
+  })
+
+  // ==================== 文件操作能力 ====================
+  
+  // 读取文件
+  ipcMain.handle('fs-read-file', async (_, filePath: string) => {
+    try {
+      const absolutePath = resolve(filePath.replace('~', homedir()))
+      if (!existsSync(absolutePath)) {
+        return { success: false, error: '文件不存在' }
+      }
+      const content = readFileSync(absolutePath, 'utf-8')
+      return { success: true, content }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 写入文件
+  ipcMain.handle('fs-write-file', async (_, filePath: string, content: string) => {
+    try {
+      const absolutePath = resolve(filePath.replace('~', homedir()))
+      const dir = dirname(absolutePath)
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true })
+      }
+      writeFileSync(absolutePath, content, 'utf-8')
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 列出目录
+  ipcMain.handle('fs-list-dir', async (_, dirPath: string) => {
+    try {
+      const absolutePath = resolve(dirPath.replace('~', homedir()))
+      if (!existsSync(absolutePath)) {
+        return { success: false, error: '目录不存在' }
+      }
+      const items = readdirSync(absolutePath).map(name => {
+        const fullPath = join(absolutePath, name)
+        const stat = statSync(fullPath)
+        return {
+          name,
+          path: fullPath,
+          isDirectory: stat.isDirectory(),
+          size: stat.size,
+          modified: stat.mtime.toISOString()
+        }
+      })
+      return { success: true, items }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 获取文件信息
+  ipcMain.handle('fs-stat', async (_, filePath: string) => {
+    try {
+      const absolutePath = resolve(filePath.replace('~', homedir()))
+      if (!existsSync(absolutePath)) {
+        return { success: false, error: '文件不存在' }
+      }
+      const stat = statSync(absolutePath)
+      return {
+        success: true,
+        info: {
+          name: basename(absolutePath),
+          path: absolutePath,
+          isDirectory: stat.isDirectory(),
+          isFile: stat.isFile(),
+          size: stat.size,
+          created: stat.birthtime.toISOString(),
+          modified: stat.mtime.toISOString()
+        }
+      }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 删除文件
+  ipcMain.handle('fs-delete', async (_, filePath: string) => {
+    try {
+      const absolutePath = resolve(filePath.replace('~', homedir()))
+      if (!existsSync(absolutePath)) {
+        return { success: false, error: '文件不存在' }
+      }
+      unlinkSync(absolutePath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 复制文件
+  ipcMain.handle('fs-copy', async (_, src: string, dest: string) => {
+    try {
+      const srcPath = resolve(src.replace('~', homedir()))
+      const destPath = resolve(dest.replace('~', homedir()))
+      copyFileSync(srcPath, destPath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 移动/重命名文件
+  ipcMain.handle('fs-move', async (_, src: string, dest: string) => {
+    try {
+      const srcPath = resolve(src.replace('~', homedir()))
+      const destPath = resolve(dest.replace('~', homedir()))
+      renameSync(srcPath, destPath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 选择文件夹
+  ipcMain.handle('select-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    })
+    return result.filePaths[0]
+  })
+
+  // 获取主目录
+  ipcMain.handle('get-home-dir', () => homedir())
+
+  // ==================== 命令执行能力 ====================
+
+  // 执行 Shell 命令
+  ipcMain.handle('shell-exec', async (_, command: string, options?: { cwd?: string; timeout?: number }) => {
+    try {
+      const cwd = options?.cwd?.replace('~', homedir()) || homedir()
+      const timeout = options?.timeout || 30000
+      
+      const { stdout, stderr } = await execAsync(command, {
+        cwd,
+        timeout,
+        maxBuffer: 10 * 1024 * 1024, // 10MB
+        shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh'
+      })
+      
+      return { success: true, stdout, stderr }
+    } catch (error: unknown) {
+      const execError = error as { stdout?: string; stderr?: string; message?: string }
+      return { 
+        success: false, 
+        error: execError.message || '执行失败',
+        stdout: execError.stdout || '',
+        stderr: execError.stderr || ''
+      }
+    }
+  })
+
+  // 获取系统信息
+  ipcMain.handle('system-info', () => {
+    return {
+      platform: platform(),
+      hostname: hostname(),
+      homeDir: homedir(),
+      cpus: cpus().length,
+      totalMemory: Math.round(totalmem() / 1024 / 1024 / 1024) + ' GB',
+      freeMemory: Math.round(freemem() / 1024 / 1024 / 1024) + ' GB',
+      nodeVersion: process.version,
+      electronVersion: process.versions.electron
+    }
+  })
+
+  // 打开文件/文件夹（用系统默认应用）
+  ipcMain.handle('shell-open-path', async (_, filePath: string) => {
+    try {
+      const absolutePath = resolve(filePath.replace('~', homedir()))
+      await shell.openPath(absolutePath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 在终端中打开
+  ipcMain.handle('shell-open-terminal', async (_, dirPath?: string) => {
+    try {
+      const cwd = dirPath ? resolve(dirPath.replace('~', homedir())) : homedir()
+      
+      if (platform() === 'darwin') {
+        spawn('open', ['-a', 'Terminal', cwd])
+      } else if (platform() === 'win32') {
+        spawn('cmd', ['/c', 'start', 'cmd', '/K', `cd /d ${cwd}`])
+      } else {
+        spawn('x-terminal-emulator', ['--working-directory', cwd])
+      }
+      
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
   })
 }
 

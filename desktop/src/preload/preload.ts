@@ -6,32 +6,121 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
+// 文件信息类型
+interface FileInfo {
+  name: string
+  path: string
+  isDirectory: boolean
+  isFile?: boolean
+  size: number
+  created?: string
+  modified: string
+}
+
 // 精灵1号 API
 const spiritAPI = {
-  // 配置
+  // ==================== 配置 ====================
   getConfig: (key: string) => ipcRenderer.invoke('get-config', key),
   setConfig: (key: string, value: unknown) => ipcRenderer.invoke('set-config', key, value),
   getAllConfig: () => ipcRenderer.invoke('get-all-config'),
   
-  // 窗口控制
+  // ==================== 窗口控制 ====================
   minimize: () => ipcRenderer.invoke('window-minimize'),
   close: () => ipcRenderer.invoke('window-close'),
   togglePin: () => ipcRenderer.invoke('window-toggle-pin'),
   
-  // AI 调用
+  // ==================== AI 调用 ====================
   callAI: (params: { message: string; provider?: string; apiKey?: string }) => 
     ipcRenderer.invoke('call-ai', params),
-  
-  // API Key 管理
   saveApiKey: (provider: string, apiKey: string) => 
     ipcRenderer.invoke('save-api-key', provider, apiKey),
   
-  // 工具
+  // ==================== 文件操作 ====================
+  fs: {
+    // 读取文件
+    readFile: (filePath: string): Promise<{ success: boolean; content?: string; error?: string }> =>
+      ipcRenderer.invoke('fs-read-file', filePath),
+    
+    // 写入文件
+    writeFile: (filePath: string, content: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs-write-file', filePath, content),
+    
+    // 列出目录
+    listDir: (dirPath: string): Promise<{ success: boolean; items?: FileInfo[]; error?: string }> =>
+      ipcRenderer.invoke('fs-list-dir', dirPath),
+    
+    // 获取文件信息
+    stat: (filePath: string): Promise<{ success: boolean; info?: FileInfo; error?: string }> =>
+      ipcRenderer.invoke('fs-stat', filePath),
+    
+    // 删除文件
+    delete: (filePath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs-delete', filePath),
+    
+    // 复制文件
+    copy: (src: string, dest: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs-copy', src, dest),
+    
+    // 移动/重命名
+    move: (src: string, dest: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs-move', src, dest),
+    
+    // 选择文件
+    selectFile: (): Promise<string | undefined> =>
+      ipcRenderer.invoke('select-file'),
+    
+    // 选择文件夹
+    selectFolder: (): Promise<string | undefined> =>
+      ipcRenderer.invoke('select-folder'),
+    
+    // 获取主目录
+    getHomeDir: (): Promise<string> =>
+      ipcRenderer.invoke('get-home-dir')
+  },
+  
+  // ==================== Shell 命令 ====================
+  shell: {
+    // 执行命令
+    exec: (command: string, options?: { cwd?: string; timeout?: number }): Promise<{
+      success: boolean;
+      stdout?: string;
+      stderr?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('shell-exec', command, options),
+    
+    // 打开文件/文件夹
+    openPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('shell-open-path', filePath),
+    
+    // 在终端中打开
+    openTerminal: (dirPath?: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('shell-open-terminal', dirPath),
+    
+    // 打开外部链接
+    openExternal: (url: string) => ipcRenderer.invoke('open-external', url)
+  },
+  
+  // ==================== 系统信息 ====================
+  system: {
+    // 获取系统信息
+    getInfo: (): Promise<{
+      platform: string;
+      hostname: string;
+      homeDir: string;
+      cpus: number;
+      totalMemory: string;
+      freeMemory: string;
+      nodeVersion: string;
+      electronVersion: string;
+    }> => ipcRenderer.invoke('system-info')
+  },
+  
+  // ==================== 工具 ====================
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   selectFile: () => ipcRenderer.invoke('select-file'),
   checkFirstLaunch: () => ipcRenderer.invoke('check-first-launch'),
   
-  // 事件监听
+  // ==================== 事件监听 ====================
   onOpenSettings: (callback: () => void) => {
     ipcRenderer.on('open-settings', callback)
     return () => ipcRenderer.removeListener('open-settings', callback)
