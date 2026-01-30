@@ -381,6 +381,7 @@ function initStore(): SimpleStore {
 }
 
 let mainWindow: BrowserWindow | null = null
+let floatingSpirit: BrowserWindow | null = null  // 悬浮精灵窗口
 let tray: Tray | null = null
 
 /**
@@ -436,6 +437,196 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+/**
+ * 创建悬浮精灵窗口
+ * 一个小精灵漂浮在屏幕边缘，鼠标悬停显示快捷菜单
+ */
+function createFloatingSpirit(): void {
+  const { screen } = require('electron')
+  const display = screen.getPrimaryDisplay()
+  const { width: screenWidth, height: screenHeight } = display.workAreaSize
+  
+  // 悬浮窗口大小（扩大以容纳菜单）
+  const spiritSize = 100
+  const menuWidth = 200
+  const menuHeight = 280
+  
+  floatingSpirit = new BrowserWindow({
+    width: spiritSize + menuWidth,
+    height: spiritSize + menuHeight,
+    x: screenWidth - spiritSize - menuWidth - 20,  // 右下角
+    y: screenHeight - spiritSize - menuHeight - 20,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+    focusable: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/preload.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  // 允许鼠标穿透（除了精灵本身）
+  floatingSpirit.setIgnoreMouseEvents(false)
+  
+  // 加载悬浮精灵页面
+  const floatingSpiritHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          background: transparent;
+          -webkit-app-region: drag;
+        }
+        .spirit-container {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: flex-end;
+          justify-content: flex-end;
+          cursor: pointer;
+          -webkit-app-region: drag;
+          padding: 10px;
+          position: relative;
+        }
+        .spirit-avatar {
+          width: 72px;
+          height: 72px;
+          animation: float 3s ease-in-out infinite;
+          transition: transform 0.2s, filter 0.2s;
+          filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+        }
+        .spirit-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+        .spirit-avatar:hover {
+          transform: scale(1.15);
+          filter: drop-shadow(0 6px 20px rgba(34, 197, 94, 0.5));
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+        .menu {
+          position: absolute;
+          bottom: 80px;
+          right: 0;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+          border-radius: 16px;
+          padding: 8px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+          opacity: 0;
+          transform: translateY(10px) scale(0.9);
+          transition: all 0.2s ease;
+          pointer-events: none;
+          min-width: 160px;
+        }
+        .spirit-container:hover .menu {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+          pointer-events: auto;
+        }
+        .menu-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: background 0.15s;
+          -webkit-app-region: no-drag;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 13px;
+          color: #333;
+        }
+        .menu-item:hover {
+          background: rgba(34, 197, 94, 0.1);
+        }
+        .menu-item .icon {
+          font-size: 18px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="spirit-container" id="container">
+        <div class="spirit-avatar"><img src="SPIRIT_IMAGE_PATH" alt="精灵"/></div>
+        <div class="menu">
+          <div class="menu-item" onclick="action('chat')">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>打开对话</span>
+          </div>
+          <div class="menu-item" onclick="action('screenshot')">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+            <span>截图提问</span>
+          </div>
+          <div class="menu-item" onclick="action('voice')">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+            <span>语音输入</span>
+          </div>
+          <div class="menu-item" onclick="action('search')">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>快速搜索</span>
+          </div>
+          <div class="menu-item" onclick="action('settings')">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <span>设置</span>
+          </div>
+        </div>
+      </div>
+      <script>
+        function action(type) {
+          window.spirit.floatingAction(type);
+        }
+      </script>
+    </body>
+    </html>
+  `
+  
+  // 读取精灵图片并转为 base64
+  const spiritImagePath = is.dev
+    ? join(__dirname, '../../../desktop/resources/spirit-float-small.png')
+    : join(process.resourcesPath, 'spirit-float-small.png')
+  
+  let spiritImageBase64 = ''
+  try {
+    const imageBuffer = readFileSync(spiritImagePath)
+    spiritImageBase64 = `data:image/png;base64,${imageBuffer.toString('base64')}`
+  } catch (e) {
+    console.error('[Spirit] 无法加载精灵图片:', e)
+    spiritImageBase64 = '' // 使用默认 emoji
+  }
+  
+  // 替换图片路径为 base64
+  const htmlWithImage = floatingSpiritHtml.replace(
+    'SPIRIT_IMAGE_PATH', 
+    spiritImageBase64 || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="70" font-size="70">🧚</text></svg>'
+  )
+  
+  floatingSpirit.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlWithImage))
+  
+  // 双击打开主窗口
+  floatingSpirit.webContents.on('before-input-event', (_, input) => {
+    if (input.type === 'mouseDown' && input.button === 'left') {
+      mainWindow?.show()
+      mainWindow?.focus()
+    }
+  })
 }
 
 /**
@@ -1051,6 +1242,43 @@ function registerIpcHandlers(): void {
     return app.getVersion()
   })
 
+  // 悬浮精灵快捷操作
+  ipcMain.handle('floating-action', async (_, action: string) => {
+    console.log('[Spirit] 悬浮精灵操作:', action)
+    
+    switch (action) {
+      case 'chat':
+        mainWindow?.show()
+        mainWindow?.focus()
+        break
+      case 'screenshot':
+        // 截图提问
+        mainWindow?.show()
+        mainWindow?.focus()
+        mainWindow?.webContents.send('start-screenshot')
+        break
+      case 'voice':
+        // 语音输入
+        mainWindow?.show()
+        mainWindow?.focus()
+        mainWindow?.webContents.send('start-voice')
+        break
+      case 'search':
+        // 快速搜索
+        mainWindow?.show()
+        mainWindow?.focus()
+        mainWindow?.webContents.send('focus-search')
+        break
+      case 'settings':
+        mainWindow?.show()
+        mainWindow?.focus()
+        mainWindow?.webContents.send('open-settings')
+        break
+    }
+    
+    return { ok: true }
+  })
+
   // 获取新闻（使用 RSS）
   ipcMain.handle('web-news', async (_, topic?: string) => {
     try {
@@ -1414,6 +1642,7 @@ app.whenReady().then(() => {
   // 创建窗口和托盘
   createWindow()
   createTray()
+  createFloatingSpirit()  // 创建悬浮精灵
   
   console.log('[Spirit] 精灵1号已启动！')
   

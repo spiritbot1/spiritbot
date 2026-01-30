@@ -4,15 +4,23 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react'
+import { 
+  SearchIcon, FolderIcon, FileIcon, TerminalIcon, SettingsIcon, 
+  ChatIcon, HelpIcon, RobotIcon, BoltIcon, LeafIcon, StarIcon,
+  CloudIcon, BalloonIcon, MicIcon, ScreenshotIcon
+} from './icons'
 
-// 精灵形象配置
+// 精灵图片路径
+const SPIRIT_ICON = './spirit-icon.png'
+
+// 精灵形象配置 (使用 SVG 图标组件)
 const SPIRIT_STYLES = {
-  cute: { emoji: '🌱', name: '萌系', color: '#4ade80' },
-  tech: { emoji: '⚡', name: '科技', color: '#60a5fa' },
-  warm: { emoji: '☁️', name: '治愈', color: '#f472b6' },
-  playful: { emoji: '🎈', name: '活泼', color: '#fb923c' },
-  mecha: { emoji: '🤖', name: '机甲', color: '#a78bfa' },
-  dream: { emoji: '💫', name: '梦幻', color: '#fbbf24' }
+  cute: { icon: LeafIcon, name: '萌系', color: '#4ade80' },
+  tech: { icon: BoltIcon, name: '科技', color: '#60a5fa' },
+  warm: { icon: CloudIcon, name: '治愈', color: '#f472b6' },
+  playful: { icon: BalloonIcon, name: '活泼', color: '#fb923c' },
+  mecha: { icon: RobotIcon, name: '机甲', color: '#a78bfa' },
+  dream: { icon: StarIcon, name: '梦幻', color: '#fbbf24' }
 }
 
 // AI 服务商配置
@@ -222,7 +230,7 @@ export default function App() {
       } else {
         // 添加欢迎消息
         const spiritStyle = SPIRIT_STYLES[allConfig.spiritStyle] || SPIRIT_STYLES.cute
-        addMessage('spirit', `${spiritStyle.emoji} 你好呀！我是${allConfig.spiritName}，现在我能帮你操作文件、执行命令、浏览网页啦！有什么可以帮你的吗？`)
+        addMessage('spirit', `你好呀！我是${allConfig.spiritName}，现在我能帮你操作文件、执行命令、浏览网页啦！有什么可以帮你的吗？`)
       }
     } catch (error) {
       console.error('加载配置失败:', error)
@@ -581,7 +589,7 @@ ${status.ready
           addMessage('spirit', result.content)
         } else {
           const spiritStyle = config ? SPIRIT_STYLES[config.spiritStyle] : SPIRIT_STYLES.cute
-          addMessage('spirit', `${spiritStyle.emoji} 哎呀，${result.error || '出了点问题'}...`)
+          addMessage('spirit', `哎呀，${result.error || '出了点问题'}...`)
         }
       }
     } catch (error) {
@@ -629,7 +637,7 @@ ${status.ready
   const startChat = () => {
     if (config) {
       const spiritStyle = SPIRIT_STYLES[config.spiritStyle] || SPIRIT_STYLES.cute
-      addMessage('spirit', `${spiritStyle.emoji} 太好了！我是${config.spiritName}，现在我可以帮你：
+      addMessage('spirit', `太好了！我是${config.spiritName}，现在我可以帮你：
 
 📂 **操作文件** - 读写、复制、移动文件
 ⚡ **执行命令** - 运行任何 Shell 命令  
@@ -641,14 +649,14 @@ ${status.ready
     setView('chat')
   }
 
-  // 快捷操作
+  // 快捷操作 (使用 SVG 图标)
   const quickActions = [
-    { icon: '🔍', label: '搜索', action: () => setInputValue('搜索 ') },
-    { icon: '🌤', label: '天气', action: () => setInputValue('天气 北京') },
-    { icon: '📰', label: '新闻', action: () => setInputValue('新闻') },
-    { icon: '📂', label: '文件', action: () => setInputValue('ls ~/Desktop') },
-    { icon: '⚡', label: '终端', action: async () => { await window.spirit.shell.openTerminal(currentPath) } },
-    { icon: '❓', label: '帮助', action: () => setInputValue('help') },
+    { Icon: SearchIcon, label: '搜索', action: () => setInputValue('搜索 ') },
+    { Icon: CloudIcon, label: '天气', action: () => setInputValue('天气 北京') },
+    { Icon: FileIcon, label: '新闻', action: () => setInputValue('新闻') },
+    { Icon: FolderIcon, label: '文件', action: () => setInputValue('ls ~/Desktop') },
+    { Icon: TerminalIcon, label: '终端', action: async () => { await window.spirit.shell.openTerminal(currentPath) } },
+    { Icon: HelpIcon, label: '帮助', action: () => setInputValue('help') },
   ]
   
   // 获取精灵信息
@@ -660,8 +668,8 @@ ${status.ready
       {/* 标题栏 */}
       <div className="title-bar drag-region">
         <div className="title-bar-left">
-          <div className="spirit-avatar" style={{ background: `linear-gradient(135deg, ${spiritStyle.color}, ${spiritStyle.color}88)` }}>
-            {spiritStyle.emoji}
+          <div className="spirit-avatar">
+            <img src={SPIRIT_ICON} alt="精灵" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <div className="title-info">
             <span className="spirit-name">{spiritName}</span>
@@ -677,7 +685,7 @@ ${status.ready
             📌
           </button>
           <button className="title-btn" onClick={() => setView('settings')} title="设置">
-            ⚙️
+            <SettingsIcon size={16} />
           </button>
           <button className="title-btn" onClick={handleMinimize} title="最小化">
             ➖
@@ -691,7 +699,7 @@ ${status.ready
       {/* 欢迎页面 */}
       {view === 'welcome' && (
         <div className="welcome-container">
-          <div className="welcome-spirit">{spiritStyle.emoji}</div>
+          <div className="welcome-spirit"><img src={SPIRIT_ICON} alt="精灵" style={{ width: 60, height: 60, objectFit: 'contain' }} /></div>
           <h1 className="welcome-title">欢迎使用精灵1号！</h1>
           <p className="welcome-subtitle">
             你的智能数字伙伴，可以帮你操作文件、执行命令、浏览网页
@@ -703,7 +711,7 @@ ${status.ready
             <div className="feature-item">🤖 AI 对话</div>
           </div>
           <button className="primary-btn" onClick={() => setView('settings')}>
-            ⚙️ 配置 API Key 开始使用
+            <SettingsIcon size={16} /> 配置 API Key 开始使用
           </button>
         </div>
       )}
@@ -715,11 +723,11 @@ ${status.ready
           <div className="quick-actions">
             {quickActions.map((action, i) => (
               <button key={i} className="quick-btn" onClick={action.action} title={action.label}>
-                {action.icon}
+                <action.Icon size={18} />
               </button>
             ))}
             <div className="current-path" title={currentPath}>
-              📍 {currentPath.split('/').slice(-2).join('/')}
+              {currentPath.split('/').slice(-2).join('/')}
             </div>
           </div>
           
@@ -741,7 +749,7 @@ ${status.ready
                             }
                           }}
                         >
-                          <span className="file-icon">{file.isDirectory ? '📁' : '📄'}</span>
+                          <span className="file-icon">{file.isDirectory ? <FolderIcon size={16} /> : <FileIcon size={16} />}</span>
                           <span className="file-name">{file.name}</span>
                           {!file.isDirectory && (
                             <span className="file-size">{formatSize(file.size)}</span>

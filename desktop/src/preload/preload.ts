@@ -201,6 +201,9 @@ const spiritAPI = {
     }
   },
   
+  // ==================== 悬浮精灵 ====================
+  floatingAction: (action: string) => ipcRenderer.invoke('floating-action', action),
+  
   // ==================== 事件监听 ====================
   onOpenSettings: (callback: () => void) => {
     ipcRenderer.on('open-settings', callback)
