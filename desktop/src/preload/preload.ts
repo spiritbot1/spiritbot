@@ -114,6 +114,52 @@ const spiritAPI = {
       electronVersion: string;
     }> => ipcRenderer.invoke('system-info')
   },
+
+  // ==================== 联网能力 ====================
+  web: {
+    // 联网搜索
+    search: (query: string): Promise<{
+      success: boolean;
+      results?: Array<{ title: string; snippet: string; url: string }>;
+      query?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('web-search', query),
+
+    // 抓取网页内容
+    fetch: (url: string): Promise<{
+      success: boolean;
+      title?: string;
+      content?: string;
+      url?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('web-fetch', url),
+
+    // 查询真实天气
+    weather: (city: string): Promise<{
+      success: boolean;
+      weather?: {
+        city: string;
+        country: string;
+        temperature: string;
+        feelsLike: string;
+        humidity: string;
+        description: string;
+        wind: string;
+        uvIndex: string;
+        high: string;
+        low: string;
+        date: string;
+      };
+      error?: string;
+    }> => ipcRenderer.invoke('web-weather', city),
+
+    // 获取新闻
+    news: (topic?: string): Promise<{
+      success: boolean;
+      news?: Array<{ title: string; link: string; description: string }>;
+      error?: string;
+    }> => ipcRenderer.invoke('web-news', topic)
+  },
   
   // ==================== 工具 ====================
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),

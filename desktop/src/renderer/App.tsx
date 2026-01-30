@@ -103,6 +103,44 @@ declare global {
       system: {
         getInfo: () => Promise<SystemInfo>
       }
+      // 联网能力
+      web: {
+        search: (query: string) => Promise<{
+          success: boolean
+          results?: Array<{ title: string; snippet: string; url: string }>
+          query?: string
+          error?: string
+        }>
+        fetch: (url: string) => Promise<{
+          success: boolean
+          title?: string
+          content?: string
+          url?: string
+          error?: string
+        }>
+        weather: (city: string) => Promise<{
+          success: boolean
+          weather?: {
+            city: string
+            country: string
+            temperature: string
+            feelsLike: string
+            humidity: string
+            description: string
+            wind: string
+            uvIndex: string
+            high: string
+            low: string
+            date: string
+          }
+          error?: string
+        }>
+        news: (topic?: string) => Promise<{
+          success: boolean
+          news?: Array<{ title: string; link: string; description: string }>
+          error?: string
+        }>
+      }
     }
   }
 }
@@ -282,10 +320,102 @@ export default function App() {
 | Electron | ${info.electronVersion} |`, 'system-info')
       return true
     }
+
+    // ==================== 联网能力 ====================
+    
+    // 联网搜索
+    if (lowerText.startsWith('搜索 ') || lowerText.startsWith('search ') || lowerText.startsWith('查询 ')) {
+      const query = text.replace(/^(搜索 |search |查询 )/i, '').trim()
+      addMessage('system', `🔍 正在搜索: ${query}`)
+      const result = await window.spirit.web.search(query)
+      if (result.success && result.results && result.results.length > 0) {
+        let content = `🔍 **搜索结果: ${query}**\n\n`
+        result.results.slice(0, 5).forEach((item, i) => {
+          content += `**${i + 1}. ${item.title}**\n${item.snippet.slice(0, 150)}...\n${item.url ? `🔗 ${item.url}\n` : ''}\n`
+        })
+        addMessage('spirit', content)
+      } else {
+        addMessage('spirit', `🔍 没有找到关于 "${query}" 的结果，试试换个关键词？`)
+      }
+      return true
+    }
+
+    // 天气查询
+    if (lowerText.startsWith('天气 ') || lowerText.startsWith('weather ') || 
+        lowerText.includes('天气怎么样') || lowerText.includes('天气如何')) {
+      let city = text.replace(/^(天气 |weather )/i, '').replace(/(天气怎么样|天气如何|的天气)/g, '').trim()
+      if (!city || city.length < 2) city = '北京'
+      
+      addMessage('system', `🌤 正在查询 ${city} 天气...`)
+      const result = await window.spirit.web.weather(city)
+      
+      if (result.success && result.weather) {
+        const w = result.weather
+        addMessage('spirit', `🌤 **${w.city} 实时天气** (${w.date})
+
+| 项目 | 数据 |
+|------|------|
+| 天气 | ${w.description} |
+| 温度 | ${w.temperature} (体感 ${w.feelsLike}) |
+| 最高/最低 | ${w.high} / ${w.low} |
+| 湿度 | ${w.humidity} |
+| 风力 | ${w.wind} |
+| 紫外线 | ${w.uvIndex} |
+
+*数据来源: wttr.in (实时更新)*`)
+      } else {
+        addMessage('spirit', `❌ 无法获取 ${city} 的天气: ${result.error}`)
+      }
+      return true
+    }
+
+    // 新闻
+    if (lowerText.startsWith('新闻') || lowerText.startsWith('news') || lowerText.includes('今日头条')) {
+      const topic = text.replace(/^(新闻 |news |今日头条)/i, '').trim()
+      addMessage('system', `📰 正在获取${topic ? topic + '相关' : ''}新闻...`)
+      const result = await window.spirit.web.news(topic || undefined)
+      
+      if (result.success && result.news && result.news.length > 0) {
+        let content = `📰 **${topic ? topic + '相关' : '今日'}新闻**\n\n`
+        result.news.slice(0, 8).forEach((item, i) => {
+          content += `**${i + 1}. ${item.title}**\n${item.description.slice(0, 80)}...\n\n`
+        })
+        addMessage('spirit', content)
+      } else {
+        addMessage('spirit', `📰 暂时无法获取新闻，请稍后再试`)
+      }
+      return true
+    }
+
+    // 网页抓取
+    if (lowerText.startsWith('抓取 ') || lowerText.startsWith('fetch ') || lowerText.startsWith('获取网页 ')) {
+      const url = text.replace(/^(抓取 |fetch |获取网页 )/i, '').trim()
+      if (!url.startsWith('http')) {
+        addMessage('spirit', `❌ 请输入完整的网址，例如: \`抓取 https://example.com\``)
+        return true
+      }
+      
+      addMessage('system', `🌐 正在抓取网页: ${url}`)
+      const result = await window.spirit.web.fetch(url)
+      
+      if (result.success && result.content) {
+        const preview = result.content.slice(0, 1500)
+        addMessage('spirit', `🌐 **${result.title}**\n\n${preview}...\n\n*来源: ${url}*`)
+      } else {
+        addMessage('spirit', `❌ 无法抓取网页: ${result.error}`)
+      }
+      return true
+    }
     
     // 帮助
     if (lowerText === 'help' || lowerText === '帮助' || lowerText === '?') {
       addMessage('spirit', `🌱 **精灵1号能力列表**
+
+**🌐 联网能力** ✨新增
+- \`搜索 <关键词>\` - 联网搜索信息
+- \`天气 <城市>\` - 查询真实天气
+- \`新闻\` - 获取今日新闻
+- \`抓取 <网址>\` - 获取网页内容
 
 **📂 文件操作**
 - \`ls <路径>\` - 列出目录内容
@@ -393,10 +523,11 @@ export default function App() {
 
   // 快捷操作
   const quickActions = [
+    { icon: '🔍', label: '搜索', action: () => setInputValue('搜索 ') },
+    { icon: '🌤', label: '天气', action: () => setInputValue('天气 北京') },
+    { icon: '📰', label: '新闻', action: () => setInputValue('新闻') },
     { icon: '📂', label: '文件', action: () => setInputValue('ls ~/Desktop') },
     { icon: '⚡', label: '终端', action: async () => { await window.spirit.shell.openTerminal(currentPath) } },
-    { icon: '🌐', label: '搜索', action: () => setInputValue('open https://google.com') },
-    { icon: '💻', label: '系统', action: () => setInputValue('系统信息') },
     { icon: '❓', label: '帮助', action: () => setInputValue('help') },
   ]
   

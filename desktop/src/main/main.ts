@@ -558,6 +558,230 @@ function registerIpcHandlers(): void {
       return { success: false, error: (error as Error).message }
     }
   })
+
+  // ==================== 联网能力 ====================
+
+  // 联网搜索（使用 DuckDuckGo，免费无需 API Key）
+  ipcMain.handle('web-search', async (_, query: string) => {
+    try {
+      console.log(`[Spirit] 联网搜索: ${query}`)
+      
+      // 使用 DuckDuckGo Instant Answer API
+      const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
+      
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Spirit-One/1.0 (Desktop App)'
+        }
+      })
+      
+      const data = await response.json() as {
+        Abstract?: string;
+        AbstractText?: string;
+        AbstractSource?: string;
+        AbstractURL?: string;
+        Heading?: string;
+        RelatedTopics?: Array<{ Text?: string; FirstURL?: string }>;
+        Results?: Array<{ Text?: string; FirstURL?: string }>;
+      }
+      
+      // 构建搜索结果
+      const results: Array<{ title: string; snippet: string; url: string }> = []
+      
+      // 主要答案
+      if (data.AbstractText) {
+        results.push({
+          title: data.Heading || query,
+          snippet: data.AbstractText,
+          url: data.AbstractURL || ''
+        })
+      }
+      
+      // 相关主题
+      if (data.RelatedTopics) {
+        for (const topic of data.RelatedTopics.slice(0, 5)) {
+          if (topic.Text && topic.FirstURL) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || topic.Text.slice(0, 50),
+              snippet: topic.Text,
+              url: topic.FirstURL
+            })
+          }
+        }
+      }
+      
+      // 如果 DuckDuckGo 没有结果，尝试使用 Google 搜索建议
+      if (results.length === 0) {
+        const googleUrl = `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`
+        const googleRes = await fetch(googleUrl)
+        const googleData = await googleRes.json() as [string, string[]]
+        
+        if (googleData[1] && googleData[1].length > 0) {
+          results.push({
+            title: '搜索建议',
+            snippet: googleData[1].join(', '),
+            url: `https://www.google.com/search?q=${encodeURIComponent(query)}`
+          })
+        }
+      }
+      
+      console.log(`[Spirit] 搜索完成，找到 ${results.length} 条结果`)
+      return { success: true, results, query }
+    } catch (error) {
+      console.error('[Spirit] 搜索失败:', error)
+      return { success: false, error: (error as Error).message, results: [] }
+    }
+  })
+
+  // 获取网页内容
+  ipcMain.handle('web-fetch', async (_, url: string) => {
+    try {
+      console.log(`[Spirit] 抓取网页: ${url}`)
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+        },
+        signal: AbortSignal.timeout(10000) // 10秒超时
+      })
+      
+      const html = await response.text()
+      
+      // 简单提取文本内容（去除 HTML 标签）
+      const text = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 5000) // 限制长度
+      
+      // 提取标题
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+      const title = titleMatch ? titleMatch[1].trim() : url
+      
+      console.log(`[Spirit] 网页抓取完成: ${title}`)
+      return { success: true, title, content: text, url }
+    } catch (error) {
+      console.error('[Spirit] 网页抓取失败:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 获取真实天气（使用 wttr.in，免费无需 API Key）
+  ipcMain.handle('web-weather', async (_, city: string) => {
+    try {
+      console.log(`[Spirit] 查询天气: ${city}`)
+      
+      // wttr.in 提供免费天气 API
+      const url = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Spirit-One/1.0'
+        },
+        signal: AbortSignal.timeout(10000)
+      })
+      
+      const data = await response.json() as {
+        current_condition?: Array<{
+          temp_C?: string;
+          FeelsLikeC?: string;
+          humidity?: string;
+          weatherDesc?: Array<{ value?: string }>;
+          windspeedKmph?: string;
+          winddir16Point?: string;
+          uvIndex?: string;
+        }>;
+        nearest_area?: Array<{
+          areaName?: Array<{ value?: string }>;
+          country?: Array<{ value?: string }>;
+        }>;
+        weather?: Array<{
+          date?: string;
+          maxtempC?: string;
+          mintempC?: string;
+          hourly?: Array<{
+            time?: string;
+            tempC?: string;
+            weatherDesc?: Array<{ value?: string }>;
+          }>;
+        }>;
+      }
+      
+      if (!data.current_condition?.[0]) {
+        return { success: false, error: '无法获取天气数据' }
+      }
+      
+      const current = data.current_condition[0]
+      const area = data.nearest_area?.[0]
+      const forecast = data.weather?.[0]
+      
+      const weather = {
+        city: area?.areaName?.[0]?.value || city,
+        country: area?.country?.[0]?.value || '',
+        temperature: current.temp_C + '°C',
+        feelsLike: current.FeelsLikeC + '°C',
+        humidity: current.humidity + '%',
+        description: current.weatherDesc?.[0]?.value || '',
+        wind: `${current.windspeedKmph} km/h ${current.winddir16Point || ''}`,
+        uvIndex: current.uvIndex || '',
+        high: forecast?.maxtempC ? forecast.maxtempC + '°C' : '',
+        low: forecast?.mintempC ? forecast.mintempC + '°C' : '',
+        date: forecast?.date || new Date().toISOString().split('T')[0]
+      }
+      
+      console.log(`[Spirit] 天气查询完成: ${weather.city} ${weather.temperature}`)
+      return { success: true, weather }
+    } catch (error) {
+      console.error('[Spirit] 天气查询失败:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // 获取新闻（使用 RSS）
+  ipcMain.handle('web-news', async (_, topic?: string) => {
+    try {
+      console.log(`[Spirit] 获取新闻: ${topic || '头条'}`)
+      
+      // 使用百度新闻 RSS
+      const rssUrl = topic 
+        ? `https://news.baidu.com/n?cmd=1&class=${encodeURIComponent(topic)}&rn=20&format=rss`
+        : 'https://news.baidu.com/n?cmd=1&class=civilnews&rn=20&format=rss'
+      
+      const response = await fetch(rssUrl, {
+        headers: { 'User-Agent': 'Spirit-One/1.0' },
+        signal: AbortSignal.timeout(10000)
+      })
+      
+      const xml = await response.text()
+      
+      // 简单解析 RSS
+      const items: Array<{ title: string; link: string; description: string }> = []
+      const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g)
+      
+      for (const match of itemMatches) {
+        const itemXml = match[1]
+        const title = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || 
+                      itemXml.match(/<title>(.*?)<\/title>/)?.[1] || ''
+        const link = itemXml.match(/<link>(.*?)<\/link>/)?.[1] || ''
+        const description = itemXml.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/)?.[1] ||
+                           itemXml.match(/<description>(.*?)<\/description>/)?.[1] || ''
+        
+        if (title) {
+          items.push({ title, link, description: description.replace(/<[^>]+>/g, '').slice(0, 200) })
+        }
+      }
+      
+      console.log(`[Spirit] 新闻获取完成: ${items.length} 条`)
+      return { success: true, news: items.slice(0, 10) }
+    } catch (error) {
+      console.error('[Spirit] 新闻获取失败:', error)
+      return { success: false, error: (error as Error).message, news: [] }
+    }
+  })
 }
 
 /**
