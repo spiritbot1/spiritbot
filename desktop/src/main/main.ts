@@ -16,6 +16,30 @@ import { homedir, platform, hostname, cpus, totalmem, freemem } from 'os'
 
 const execAsync = promisify(exec)
 
+// 常见的 Node.js 安装路径
+const NODE_PATHS = [
+  '/usr/local/bin',           // Homebrew (Intel Mac)
+  '/opt/homebrew/bin',        // Homebrew (Apple Silicon)
+  '/usr/bin',                 // 系统自带
+  join(homedir(), '.nvm/versions/node'),  // NVM
+  join(homedir(), '.volta/bin'),          // Volta
+  join(homedir(), '.fnm/aliases/default/bin'),  // FNM
+]
+
+// 获取完整的 PATH（包含常见 Node.js 路径）
+function getEnhancedPath(): string {
+  const currentPath = process.env.PATH || ''
+  const additionalPaths = NODE_PATHS.filter(p => existsSync(p)).join(':')
+  return additionalPaths + ':' + currentPath
+}
+
+// 带增强 PATH 的 exec
+function execWithPath(cmd: string): Promise<{ stdout: string; stderr: string }> {
+  return execAsync(cmd, {
+    env: { ...process.env, PATH: getEnhancedPath() }
+  })
+}
+
 // ==================== Moltbot 完整集成（通过子进程）====================
 
 // Moltbot 路径
@@ -189,9 +213,9 @@ async function initMoltbot(): Promise<{ ok: boolean; error?: string }> {
     return { ok: false, error: 'Moltbot 文件不存在' }
   }
   
-  // 检查 Node.js
+  // 检查 Node.js（使用增强的 PATH）
   try {
-    const { stdout } = await execAsync('node --version')
+    const { stdout } = await execWithPath('node --version')
     const version = stdout.trim()
     console.log('[Spirit] 系统 Node.js 版本:', version)
     
@@ -233,7 +257,7 @@ async function callMoltbot(command: string, args: string[] = []): Promise<{
       
       const proc = spawn('node', fullArgs, {
         cwd: MOLTBOT_PATH,
-        env: { ...process.env, PATH: process.env.PATH },
+        env: { ...process.env, PATH: getEnhancedPath() },
         stdio: ['pipe', 'pipe', 'pipe']
       })
       
@@ -286,7 +310,8 @@ async function moltbotBashExec(command: string, cwd?: string): Promise<{
       cwd: cwd || homedir(),
       timeout: 60000,
       maxBuffer: 10 * 1024 * 1024,
-      shell: platform() === 'win32' ? 'powershell.exe' : '/bin/zsh'
+      shell: platform() === 'win32' ? 'powershell.exe' : '/bin/zsh',
+      env: { ...process.env, PATH: getEnhancedPath() }
     })
     
     return { ok: true, stdout, stderr }
@@ -979,7 +1004,8 @@ function registerIpcHandlers(): void {
         cwd,
         timeout,
         maxBuffer: 10 * 1024 * 1024, // 10MB
-        shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh'
+        shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh',
+        env: { ...process.env, PATH: getEnhancedPath() }
       })
       
       return { success: true, stdout, stderr }
@@ -1358,6 +1384,9 @@ function registerIpcHandlers(): void {
  */
 function buildMoltbotEnv(provider: string, apiKey: string): NodeJS.ProcessEnv {
   const env = { ...process.env }
+  
+  // 确保 PATH 包含常见的 Node.js 路径
+  env.PATH = getEnhancedPath()
   
   switch (provider) {
     case 'siliconflow':
