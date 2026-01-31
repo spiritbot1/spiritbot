@@ -200,8 +200,8 @@ spirit-one/
 
 | 芯片类型 | 下载链接 |
 |---------|---------|
-| **Apple Silicon** (M1/M2/M3) | [精灵1号-arm64.dmg](https://github.com/spirit-one/spirit-one/releases) |
-| **Intel** | [精灵1号-x64.dmg](https://github.com/spirit-one/spirit-one/releases) |
+| **Apple Silicon** (M1/M2/M3) | [Spirit-One-0.8.0-mac-arm64.dmg](https://github.com/spiritbot1/spiritbot/releases/download/v0.8.0/Spirit-One-0.8.0-mac-arm64.dmg) |
+| **Intel** | [Spirit-One-0.8.0-mac-x64.dmg](https://github.com/spiritbot1/spiritbot/releases/download/v0.8.0/Spirit-One-0.8.0-mac-x64.dmg) |
 
 > 💡 点击左上角  → 关于本机，查看"芯片"类型
 
@@ -209,13 +209,17 @@ spirit-one/
 
 | 系统 | 下载链接 |
 |-----|---------|
-| Windows 10/11 (64位) | [精灵1号-Setup.exe](https://github.com/spirit-one/spirit-one/releases) |
+| Windows 10/11 (64位) | 即将推出 |
 
 **安装后：**
 1. 双击打开应用
-2. 配置一个 AI 服务的 API Key
+2. 配置一个 AI 服务的 API Key（支持 12+ 模型提供商）
 3. 给精灵取个名字
 4. 开始聊天！
+
+**支持的模型提供商：**
+- 🇨🇳 硅基流动、DeepSeek、月之暗面、智谱AI、百川、通义千问、豆包
+- 🌍 OpenAI、Anthropic、OpenRouter、Groq、自定义兼容接口
 
 详见 [桌面版文档](./desktop/README.md)
 
@@ -303,6 +307,8 @@ docker-compose up -d
 
 | 版本 | 日期 | 更新 |
 |------|------|------|
+| v0.8.0 | 2026-01-31 | 🚀 **全模型支持** - 12+ AI 模型提供商 |
+| v0.7.x | 2026-01-31 | 3D 精灵形象、SVG 图标、打包修复 |
 | v0.6.0 | 2026-01-31 | 🚀 **Moltbot 深度集成** - 完整 Agent 能力接入 |
 | v0.5.0 | 2026-01-31 | 桌面应用 Electron 框架搭建 |
 | v0.3.0 | 2026-01-31 | 精灵人格系统、多模型调度、用户设置、飞书交互卡片 |
