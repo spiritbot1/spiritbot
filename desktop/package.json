@@ -1,6 +1,6 @@
 {
   "name": "spirit-one-desktop",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "精灵1号 - 你的数字生命伴侣 (桌面版)",
   "main": "out/main/main.js",
   "author": "Spirit One Team",
@@ -55,6 +55,7 @@
         "filter": [
           "dist/**/*",
           "node_modules/**/*",
+          "docs/**/*",
           "package.json",
           "moltbot.mjs"
         ]

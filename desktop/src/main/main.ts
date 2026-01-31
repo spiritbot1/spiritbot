@@ -1388,33 +1388,37 @@ function buildMoltbotEnv(provider: string, apiKey: string): NodeJS.ProcessEnv {
   // 确保 PATH 包含常见的 Node.js 路径
   env.PATH = getEnhancedPath()
   
-  switch (provider) {
-    case 'siliconflow':
-      // 硅基流动 - 设置为 siliconflow provider 的 API Key
-      // 同时设置 OPENAI 兼容变量作为后备
-      env.SILICONFLOW_API_KEY = apiKey
-      env.OPENAI_API_KEY = apiKey
-      env.OPENAI_BASE_URL = 'https://api.siliconflow.cn/v1'
-      break
-    case 'openrouter':
-      env.OPENROUTER_API_KEY = apiKey
-      break
-    case 'openai':
-      env.OPENAI_API_KEY = apiKey
-      break
-    case 'anthropic':
-      env.ANTHROPIC_API_KEY = apiKey
-      break
-    case 'deepseek':
-      env.DEEPSEEK_API_KEY = apiKey
-      break
-    case 'moonshot':
-      env.OPENAI_API_KEY = apiKey
-      env.OPENAI_BASE_URL = 'https://api.moonshot.cn/v1'
-      break
-    default:
-      // 默认当作 OpenAI 兼容接口
-      env.OPENAI_API_KEY = apiKey
+  // 模型提供商配置映射
+  const providerConfigs: Record<string, { key?: string; baseUrl?: string }> = {
+    // 国产模型
+    siliconflow: { key: 'SILICONFLOW_API_KEY', baseUrl: 'https://api.siliconflow.cn/v1' },
+    deepseek: { key: 'DEEPSEEK_API_KEY', baseUrl: 'https://api.deepseek.com/v1' },
+    moonshot: { baseUrl: 'https://api.moonshot.cn/v1' },
+    zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
+    baichuan: { baseUrl: 'https://api.baichuan-ai.com/v1' },
+    qwen: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+    doubao: { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3' },
+    // 国际模型
+    openai: { key: 'OPENAI_API_KEY' },
+    anthropic: { key: 'ANTHROPIC_API_KEY' },
+    openrouter: { key: 'OPENROUTER_API_KEY', baseUrl: 'https://openrouter.ai/api/v1' },
+    groq: { key: 'GROQ_API_KEY', baseUrl: 'https://api.groq.com/openai/v1' },
+  }
+  
+  const config = providerConfigs[provider]
+  if (config) {
+    // 设置专用环境变量
+    if (config.key) {
+      env[config.key] = apiKey
+    }
+    // 同时设置 OpenAI 兼容变量（大多数提供商都兼容）
+    env.OPENAI_API_KEY = apiKey
+    if (config.baseUrl) {
+      env.OPENAI_BASE_URL = config.baseUrl
+    }
+  } else {
+    // 自定义或未知提供商，当作 OpenAI 兼容接口
+    env.OPENAI_API_KEY = apiKey
   }
   
   return env

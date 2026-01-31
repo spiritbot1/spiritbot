@@ -23,12 +23,23 @@ const SPIRIT_STYLES = {
   dream: { icon: StarIcon, name: '梦幻', color: '#fbbf24' }
 }
 
-// AI 服务商配置
+// AI 服务商配置 - 支持主流模型
 const AI_PROVIDERS = [
-  { id: 'siliconflow', name: '硅基流动', placeholder: 'sk-...' },
-  { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...' },
-  { id: 'openai', name: 'OpenAI', placeholder: 'sk-...' },
-  { id: 'moonshot', name: '月之暗面', placeholder: 'sk-...' }
+  // 国产模型
+  { id: 'siliconflow', name: '硅基流动', placeholder: 'sk-...', desc: 'DeepSeek V3, Qwen 等' },
+  { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', desc: 'DeepSeek 官方' },
+  { id: 'moonshot', name: '月之暗面 (Kimi)', placeholder: 'sk-...', desc: 'Kimi 大模型' },
+  { id: 'zhipu', name: '智谱 AI', placeholder: 'sk-...', desc: 'GLM-4 系列' },
+  { id: 'baichuan', name: '百川智能', placeholder: 'sk-...', desc: 'Baichuan 系列' },
+  { id: 'qwen', name: '通义千问', placeholder: 'sk-...', desc: '阿里云 Qwen' },
+  { id: 'doubao', name: '豆包 (字节)', placeholder: 'sk-...', desc: '字节跳动 Doubao' },
+  // 国际模型
+  { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', desc: 'GPT-4, GPT-4o' },
+  { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', desc: 'Claude 3.5' },
+  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', desc: '聚合多模型' },
+  { id: 'groq', name: 'Groq', placeholder: 'gsk_...', desc: '超快推理' },
+  // 自定义
+  { id: 'custom', name: '自定义 OpenAI 兼容', placeholder: 'your-api-key', desc: '任意兼容接口' }
 ]
 
 // 文件信息类型
